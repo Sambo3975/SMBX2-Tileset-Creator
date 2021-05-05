@@ -1,6 +1,6 @@
 # SMBX2-Tileset-Creator
 
-_Note: This software is currently in early Alpha stage and is currently just a UI with no real functionality behind it._
+_Note: This software is currently in early Alpha stage and is just a UI with no real functionality behind it._
 
 This program streamlines the creation of tilesets in SMBX2 by automating the most tedious parts of the process:
 - Cutting the image with all your tiles into individual block-*.png images.
