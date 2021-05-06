@@ -1,4 +1,4 @@
-# SMBX2-Tileset-Creator
+# SMBX2 Tileset Importer
 
 _Note: This software is currently in early Alpha stage and is currently just a UI with no real functionality behind it._
 
