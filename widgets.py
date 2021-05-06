@@ -6,7 +6,7 @@ from tooltip import CreateToolTip
 class ColorSelector(ttk.Frame):
     """Color Selector widget"""
     def __change_color(self, *args):
-        color_code = colorchooser.askcolor(title='Choose Color')
+        color_code = colorchooser.askcolor(title='Select Color')
         if color_code is not None:  # user selected a color and did not hit Cancel
             self.__color_preview.configure(background=color_code[1])
             self.value.set(color_code[1])
@@ -19,7 +19,7 @@ class ColorSelector(ttk.Frame):
                                      background=color)
         self.__color_preview.grid(column=1, row=1)
         if text is None:
-            text = 'Choose Color'
+            text = 'Select Color'
         self.__color_button = ttk.Button(self, text=text, command=self.__change_color)
         self.__color_button.grid(column=2, row=1)
         if tooltip is not None:
