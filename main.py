@@ -13,57 +13,69 @@ SMBX doesn't run on anything but Windows (or Wine) anyway.
 
 Created by Sambo
 """
-
+import tkinter
 from tkinter import *
 from tkinter import ttk, colorchooser, filedialog
+
+import regex as regex
+
 from tooltip import CreateToolTip
-from widgets import ColorSelector
+from widgets import ColorSelector, VerifiedWidget
+
+MAX_BLOCK_ID = 1291
+MAX_BGO_ID = 303
+MAX_NPC_ID = 674
 
 data_defaults = {
-    'view': {
-        'grid_size': '16',
-        'show_grid': True,
-        'show_block_types': True,
-        'highlight_color': '#ff8040',
-    },
-    'export': {
-        'pixel_scale': '2',
-        'block_ids': 'Avoid Special',
-        'bgo_ids': 'Avoid Special',
-        'create_pge_tileset': True,
-        'start_high': False,
-    },
-    'tile:': {
-        'animation': {
-            'frames': '1',
-            'framespeed': '8',
-        },
-        'light': {
-            'lightoffsetx': '0',
-            'lightoffsety': '0',
-            'lightradius': '128',
-            'lightbrightness': '1',
-            'lightcolor': '#ffffff',
-            'lightflicker': False,
-        },
-        'priority': -85,
-        'behavior': {
-            'content_type': 'empty',
-            'content_id': '0',
 
-            'collision_type': 'Solid',
+    # View
 
-            'sizable': False,
-            'pswitchable': False,
-            'slippery': False,
-            'lava': False,
-            'bumpable': False,
-            'smashable': '0',
-        },
-    },
+    'grid_size': '16',
+    'show_grid': True,
+    'show_block_types': True,
+    'highlight_color': '#ff8040',
+
+    # Export
+
+    'pixel_scale': '2',
+    'block_ids': 'Avoid Special',
+    'bgo_ids': 'Avoid Special',
+    'create_pge_tileset': True,
+    'start_high': False,
+
+    # Tile
+
+    # Animation
+    'frames': '1',
+    'framespeed': '8',
+
+    # Light
+    'lightoffsetx': '0',
+    'lightoffsety': '0',
+    'lightradius': '128',
+    'lightbrightness': '1',
+    'lightcolor': '#ffffff',
+    'lightflicker': False,
+
+    # BGO Exclusive
+    'priority': -85,
+
+    # Behavior (Block Exclusive)
+    'content_type': 'empty',
+    'content_id': '0',
+
+    'collision_type': 'Solid',
+
+    'sizable': False,
+    'pswitchable': False,
+    'slippery': False,
+    'lava': False,
+    'bumpable': False,
+    'smashable': '0',
 }
 
 current_row = 0
+readonly_widget_map = {}
 
 
 def cur_row():
@@ -138,6 +150,131 @@ def load_data(defaults=None, data_from_file=None):
             raise ValueError(f'Invalid entry: {k}: {v}, ({type(v)})')
 
 
+built_in_id_lists = {
+    'Block': {
+        'Avoid Special': '1;3;6-29;38-54;56-59;61-87;91-108;113-114;116-168;182-191;194-223;227-266;270-279;284-370'
+                         ';372-403;407-419;421-427;432-456;488-525;527-597;599-619;630;635-638;1001-1005;1008-1072'
+                         ';1076-1101;1106-1132;1138-1141;1156-1267;1269-1270',
+        'User Slots': '751-1000',
+    },
+    'BGO': {
+        'Avoid Special': '1-10;14-34;36-59;62-69;75-86;89-91;93-97;99;101-103;106;108-133;147-159;161-173;187-190;232'
+                         '-279;281-303',
+        'User Slots': '751-1000',
+    }
+}
+
+
+def get_id_list_preset(value, tile_type):
+    if value in built_in_id_lists[tile_type]:
+        return built_in_id_lists[tile_type][value]
+    return value
+
+
+def parse_id_list(value, tile_type, check_valid_only=False):
+    value = get_id_list_preset(value, tile_type)
+    if value == '' or regex.match(r'^(\d+(?:-\d+)?;?)+$', value) is None:
+        return False, None
+    ids = []
+    last_id = 0
+    for x in value.split(';'):
+        x_split = x.split('-')
+        lo = x_split[0]
+        if not lo.isdigit():
+            return False, None
+        lo = int(lo)
+        if lo <= last_id:
+            return False, None
+        hi = None
+        if len(x_split) == 2:
+            hi = int(x_split[1])
+        if hi is not None:
+            if hi <= lo:
+                return False, None
+            last_id = hi
+            if not check_valid_only:
+                for v in range(lo, hi + 1):
+                    ids.append(v)
+        else:
+            last_id = lo
+            if not check_valid_only:
+                ids.append(lo)
+    return True, ids
+
+
+def verify_id_list(value, tile_type):
+    return value == '' or regex.match(r'^[0-9\-;]+$', get_id_list_preset(value, tile_type)) is not None
+
+
+def verify_block_id_list(value):
+    return verify_id_list(value, 'Block')
+
+
+def verify_bgo_id_list(value):
+    return verify_id_list(value, 'BGO')
+
+
+def good_block_id_list(value):
+    return parse_id_list(value, 'Block', True)[0]
+
+
+def good_bgo_id_list(value):
+    return parse_id_list(value, 'BGO', True)[0]
+
+
+def good_tile_id(value):
+    if value == '':
+        return True
+    if value == '-':
+        return False
+    tile_type = window.data['type'].get()
+    value = int(value)
+    return tile_type == 'Block' and 1 <= value <= MAX_BLOCK_ID \
+           or tile_type == 'BGO' and (1 <= value <= MAX_BGO_ID or 751 <= value <= 1000)
+
+
+def good_content_id(value):
+    if value == '':
+        return False
+    content_type = window.data['content_type'].get()
+    value = int(value)
+    return content_type == 'Coins' and 1 <= value <= 99 \
+           or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
+
+
+def update_tile_type(*args):
+    tile_type = window.data['type'].get()
+    if tile_type == 'Block':
+        window.render_priority_input.configure(state=DISABLED)
+        for x in window.tile_behavior_frame.winfo_children():
+            if str(x) in readonly_widget_map:
+                x.configure(state='readonly')
+            else:
+                x.configure(state=NORMAL)
+    elif tile_type == 'BGO':
+        window.render_priority_input.configure(state=NORMAL)
+        for x in window.tile_behavior_frame.winfo_children():
+            x.configure(state=DISABLED)
+    window.type_selector.check_variable()
+
+
+def update_light_source(*args):
+    state = NORMAL if window.data['light_source'].get() else DISABLED
+    for x in window.light_frame.winfo_children():
+        x.configure(state=state)
+
+
+def update_content_type(*args):
+    # If I get rid of this call, the conditional below always evaluates to True. Should I be worried?
+    repr(window.content_type_box.config('state')[4])
+
+    if window.data['content_type'].get() != 'Empty' and window.content_type_box['state'] != DISABLED:
+        window.contents_box.configure(state=NORMAL)
+        window.contents_box.check_variable()
+    else:
+        window.contents_box.configure(state=DISABLED)
+
+
 # ----------------------------
 # Button functions
 # ----------------------------
@@ -189,74 +326,121 @@ def change_highlight_color():
 
 class Window(Tk):
 
-    @staticmethod
-    def verify_int(value):
-        return value.isdigit() or value == ''
+    def _verify_int(self, name, value):
+        widget = self.nametowidget(name)
+        name = name.split('.')[-1]  # Ignore the widget's lineage. I only want its name
+        good_input = value.isdigit()
+        valid = good_input or value == ''
+        if good_input:
+            try:
+                min_val = int(widget.config('from')[4])
+                max_val = int(widget.config('to')[4])
+                good_input = min_val <= int(value) <= max_val
+            except TclError:  # Does not have from and to properties; must check another way
+                int_val = int(value)
+                if name == 'grid_size':
+                    good_input = 8 <= int_val <= 128
+                elif name == 'pixel_scale':
+                    good_input = 1 <= int_val <= 8
+        if good_input:
+            self.data['lv_' + name] = value
+
+        self._update_style(name, good_input)
+
+        self._bell_on_invalid(valid)
+        return valid
 
     def __init__(self):
         super().__init__()
 
+        # Styles for indicating bad inputs
+        # I will ignore bad inputs that are of the right type but not in the acceptable range. This is to avoid a couple
+        # problems I've seen in other programs:
+        # 1. You try to clear the box so you can put in something else, but the empty string is not allowed. You have to
+        #    add the value you want onto the end and then remove the first number. Annoying.
+        # 2. Say the empty string is allowed, but values less than 8 are not. You want to put in 12. You can't type a 1
+        #    or a 2 in the empty box because they're both too low. You are forced to type 812 and then remove the 8.
+        #    Annoying.
+        # How any UX designer notices either of these problems and doesn't immediately fix them is beyond me. /rant
+        # style_bad = ttk.Style()
+        # print(style_bad.theme_names())
+        # style_bad.theme_use('clam')
+        # style_bad.configure('bad.TCombobox', fieldbackground='#f4cccc', foreground='maroon')
+        # style_bad_spinbox = ttk.Style()
+        # style_bad_spinbox.configure('bad.TSpinbox', background='#f4cccc')
+        # style_bad_entry = ttk.Style()
+        # style_bad_entry.configure('bad.TEntry', background='#f4cccc')
+
         self.data = {
-            'dirty': False,  # Set to true whenever there are unsaved changes
-            'view': {
-                'highlight_color': StringVar(),
-                'grid_size': StringVar(),
-                'show_grid': BooleanVar(),
-                'show_block_types': BooleanVar(),
-            },
-            'export': {
-                'pixel_scale': StringVar(),
-                'block_ids': StringVar(),
-                'bgo_ids': StringVar(),
-                'create_pge_tileset': BooleanVar(),
-                'start_high': BooleanVar(),
-            },
-            'current_tile': {
+            # Set to true whenever there are unsaved changes
+            'dirty': False,
 
-                # Internally assigned
-                'x': IntVar(),
-                'y': IntVar(),
-                'w': IntVar(),
-                'h': IntVar(),
+            # View
 
-                # Tile Type (Block/BGO)
-                'type': StringVar(),
+            'highlight_color': StringVar(),
+            'grid_size': StringVar(),
+            'show_grid': BooleanVar(),
+            'show_block_types': BooleanVar(),
 
-                # Settings for both Blocks and BGOs
-                'id': StringVar(),
-                'frames': StringVar(),
-                'framespeed': StringVar(),
+            # Export
 
-                'light_source': BooleanVar(),
-                'lightoffsetx': StringVar(),
-                'lightoffsety': StringVar(),
-                'lightradius': StringVar(),
-                'lightbrightness': StringVar(),
-                'lightcolor': StringVar(),
-                'lightflicker': BooleanVar(),
+            'pixel_scale': StringVar(),
+            'block_ids': StringVar(),
+            'bgo_ids': StringVar(),
+            'create_pge_tileset': BooleanVar(),
+            'start_high': BooleanVar(),
 
-                # Settings exclusive to BGOs
-                'priority': StringVar(),
+            # Current Tile
 
-                # Settings exclusive to Blocks
-                'collision_type': StringVar(),
-                'content_type': StringVar(),
-                'content_id': StringVar(),
+            # Internally assigned
+            'x': IntVar(),
+            'y': IntVar(),
+            'w': IntVar(),
+            'h': IntVar(),
 
-                'playerfilter': StringVar(),
-                'npcfilter': StringVar(),
+            # Tile Type (Block/BGO)
+            'type': StringVar(),
 
-                'sizable': BooleanVar(),
-                'lava': BooleanVar(),
-                'pswitchable': BooleanVar(),
-                'ediblebyvine': BooleanVar(),
-                'slippery': BooleanVar(),
-                'bumpable': BooleanVar(),
-                'smashable': StringVar(),
-                'customhurt': BooleanVar(),
-            },
+            # Settings for both Blocks and BGOs
+            'id': StringVar(),
+            'frames': StringVar(),
+            'framespeed': StringVar(),
+
+            'noshadows': StringVar(),
+            'light_source': BooleanVar(),
+            'lightoffsetx': StringVar(),
+            'lightoffsety': StringVar(),
+            'lightradius': StringVar(),
+            'lightbrightness': StringVar(),
+            'lightcolor': StringVar(),
+            'lightflicker': BooleanVar(),
+
+            # Settings exclusive to BGOs
+            'priority': StringVar(),
+
+            # Settings exclusive to Blocks
+            'collision_type': StringVar(),
+            'content_type': StringVar(),
+            'content_id': StringVar(),
+
+            'playerfilter': StringVar(),
+            'npcfilter': StringVar(),
+
+            'sizable': BooleanVar(),
+            'lava': BooleanVar(),
+            'pswitchable': BooleanVar(),
+            'ediblebyvine': BooleanVar(),
+            'slippery': BooleanVar(),
+            'bumpable': BooleanVar(),
+            'smashable': StringVar(),
+            'customhurt': BooleanVar(),
+
             'tiles': [],
         }
+
+        self.label_width_tile_settings = 60
+        self.label_width_appearance = 110
+        self.label_width_behavior = 100
 
         self.title("SMBX2 Tileset Importer")
         self.iconbitmap('data/icon.ico')
@@ -305,25 +489,27 @@ class Window(Tk):
         self.view_box = ttk.LabelFrame(self.config_frame, text='View', padding='3 3 12 8')
         self.view_box.grid(column=1, row=1, sticky=(W, E))
 
+        # Highlight Color
         ttk.Label(self.view_box, text='Highlight Color:').grid(column=1, row=next_row(1), sticky=W)
-        self.highlight_color = self.data['view']['highlight_color']
-        ColorSelector(self.view_box, variable=self.highlight_color, color=data_defaults['view']['highlight_color'],
+        self.highlight_color = self.data['highlight_color']
+        ColorSelector(self.view_box, variable=self.highlight_color, color=data_defaults['highlight_color'],
                       tooltip='Change the color that will be used to highlight selected tiles. Use this if the '
                               'current color does not contrast well with the tile colors.') \
             .grid(column=1, row=next_row(), sticky=W)
 
-        self.grid_size = self.data['view']['grid_size']
-        ttk.Label(self.view_box, text='Grid Size:').grid(column=1, row=next_row(), sticky=W, padx=0)
-        grid_size_box = ttk.Combobox(self.view_box, textvariable=self.grid_size, values=('8', '16', '32'), width=6)
-        grid_size_box.grid(column=1, row=next_row(), sticky=W)
-        CreateToolTip(grid_size_box, 'The size of the grid. This is applied before image scaling.')
-
-        self.grid_show = self.data['view']['show_grid']
-        ttk.Checkbutton(self.view_box, text='Show Grid', variable=self.grid_show, offvalue=False, onvalue=True) \
+        # Grid Size
+        VerifiedWidget(ttk.Combobox, {'values': ('8', '16', '32'), 'width': 6}, self.view_box,
+                       variable=self.data['grid_size'], min_val=8, max_val=128, orientation='vertical',
+                       label_text='Grid Size:',
+                       tooltip='Size of each grid square in pixels. Must be between 8 and 128, inclusive.') \
             .grid(column=1, row=next_row(), sticky=W)
 
-        self.show_block_types = self.data['view']['show_block_types']
-        ttk.Checkbutton(self.view_box, text='Show Block Types', variable=self.show_block_types, offvalue=False,
+        # Show Grid
+        ttk.Checkbutton(self.view_box, text='Show Grid', variable=self.data['show_grid'], offvalue=False, onvalue=True) \
+            .grid(column=1, row=next_row(), sticky=W)
+
+        # Show Block Types
+        ttk.Checkbutton(self.view_box, text='Show Block Types', variable=self.data['show_block_types'], offvalue=False,
                         onvalue=True).grid(column=1, row=next_row(), sticky=W)
 
         # Export Settings Section
@@ -331,44 +517,44 @@ class Window(Tk):
         self.export_box = ttk.LabelFrame(self.config_frame, text='Export Settings', padding='3 3 12 8')
         self.export_box.grid(column=1, row=2, sticky=(N, S, W, E))
 
-        self.pixel_scale = self.data['export']['pixel_scale']
-        ttk.Label(self.export_box, text='Pixel Scale:').grid(column=1, row=next_row(1), sticky=W)
-        pixel_scale_box = ttk.Combobox(self.export_box, textvariable=self.pixel_scale, values=('1', '2', '4'), width=6)
-        pixel_scale_box.grid(column=1, row=next_row(), sticky=W)
-        CreateToolTip(pixel_scale_box, 'The scale factor that will be applied to the image before exporting as block'
-                                       ' images. Also changes the scale at which the image is displayed in this editor.')
+        # Pixel Scale
+        VerifiedWidget(ttk.Combobox, {'values': ('1', '2', '4'), 'width': 6}, self.export_box,
+                       variable=self.data['pixel_scale'], min_val=1, max_val=8, orientation='vertical',
+                       label_text='Pixel Scale:',
+                       tooltip='The scale factor that will be applied to the image before exporting as block images. '
+                               'Also changes the scale at which the image is displayed in this editor. Must be '
+                               'between 1 and 8, inclusive.') \
+            .grid(column=1, row=next_row(), sticky=W)
 
-        self.block_ids = self.data['export']['block_ids']
-        ttk.Label(self.export_box, text='Block IDs:').grid(column=1, row=next_row(), sticky=W)
-        block_ids_box = ttk.Combobox(self.export_box, textvariable=self.block_ids,
-                                     values=('Avoid Special', 'User Slots', ''), width=12)
-        block_ids_box.grid(column=1, row=next_row(), sticky=W)
-        CreateToolTip(block_ids_box, 'The pool of Block IDs to be assigned or overwritten. IDs can be described in the '
-                                     'following ways, separated by semicolons (;):\n\n'
-                                     '<single number> - assigns one ID\n\n'
-                                     '<lo>-<hi> - a range from low to high. Inclusive.\n\n'
-                                     'Example: 1-27;48;99-107\n\n'
-                                     'Presets:\n\n'
-                                     'Avoid Special: Avoids overwriting item blocks, blocks with special '
-                                     'interactions such as lava, spikes, or filters; and pipes.\n\n'
-                                     'User Slots: Overwrites blocks in the user-defined block range (751-1000)')
+        # Block IDs
+        VerifiedWidget(ttk.Combobox, {'values': ('Avoid Special', 'User Slots', ''), 'width': 12}, self.export_box,
+                       variable=self.data['block_ids'], verify_function=verify_block_id_list,
+                       good_function=good_block_id_list, orientation='vertical', label_text='Block IDs:',
+                       tooltip='The pool of Block IDs to be assigned or overwritten. It is a list of IDs and/or ID'
+                               'ranges, separated by semicolons (;). These IDs must be in ascending order.\n\n'
+                               'Example Input: 1-3;37;48-50\n'
+                               'This makes the pool of IDs contain 1,2,3,37,48,49, and 50.\n\n'
+                               'Presets:\n\n'
+                               'Avoid Special: Avoids overwriting item blocks, blocks with special '
+                               'interactions such as lava, spikes, or filters; and pipes.\n\n'
+                               'User Slots: Overwrites blocks in the user-defined block range (751-1000)') \
+            .grid(column=1, row=next_row(), sticky=W)
 
-        self.bgo_ids = self.data['export']['bgo_ids']
-        ttk.Label(self.export_box, text='BGO IDs:').grid(column=1, row=next_row(), sticky=W)
-        block_ids_box = ttk.Combobox(self.export_box, textvariable=self.bgo_ids,
-                                     values=('Avoid Special', 'User Slots', ''), width=12)
-        block_ids_box.grid(column=1, row=next_row(), sticky=W)
-        CreateToolTip(block_ids_box, 'The pool of BGO IDs to be assigned or overwritten. IDs can be described in the '
-                                     'following ways, separated by semicolons (;):\n\n'
-                                     '<single number> - assigns one ID\n\n'
-                                     '<lo>-<hi> - a range from low to high. Inclusive.\n\n'
-                                     'Example: 1-27;48;99-107\n\n'
-                                     'Presets:\n\n'
-                                     'Avoid Special: Avoids overwriting arrow BGOs and BGOs with special interactions '
-                                     'such as line guides, redirectors, and doors.\n\n'
-                                     'User Slots: Overwrites blocks in the user-defined BGO range (751-1000)')
+        # BGO IDs
+        VerifiedWidget(ttk.Combobox, {'values': ('Avoid Special', 'User Slots', ''), 'width': 12}, self.export_box,
+                       variable=self.data['bgo_ids'], verify_function=verify_bgo_id_list,
+                       good_function=good_bgo_id_list, orientation='vertical', label_text='BGO IDs:',
+                       tooltip='The pool of Block IDs to be assigned or overwritten. It is a list of IDs and/or ID'
+                               'ranges, separated by semicolons (;). These IDs must be in ascending order.\n\n'
+                               'Example Input: 1-3;37;48-50\n'
+                               'This makes the pool of IDs contain 1,2,3,37,48,49, and 50.\n\n'
+                               'Presets:\n\n'
+                               'Avoid Special: Avoids overwriting arrow BGOs and BGOs with special interactions '
+                               'such as line guides, redirectors, and doors.\n\n'
+                               'User Slots: Overwrites blocks in the user-defined BGO range (751-1000)') \
+            .grid(column=1, row=next_row(), sticky=W)
 
-        self.start_high = self.data['export']['start_high']
+        self.start_high = self.data['start_high']
         start_high_box = ttk.Checkbutton(self.export_box, text='IDs High to Low', variable=self.start_high,
                                          offvalue=False, onvalue=True)
         start_high_box.grid(column=1, row=next_row(), sticky=W)
@@ -376,7 +562,7 @@ class Window(Tk):
                                       'lowest and increasing. Useful if you don\'t want to overwrite episode graphics'
                                       ' in a level.')
 
-        self.create_pge_tileset = self.data['export']['create_pge_tileset']
+        self.create_pge_tileset = self.data['create_pge_tileset']
         pge_tileset_box = ttk.Checkbutton(self.export_box, text='Create PGE Tileset', variable=self.create_pge_tileset,
                                           offvalue=False, onvalue=True)
         pge_tileset_box.grid(column=1, row=next_row(), sticky=W)
@@ -411,200 +597,225 @@ class Window(Tk):
         # Tile Settings
 
         self.tile_settings_frame = ttk.LabelFrame(self.tile_frame, text='Tile Settings', padding='3 3 12 8')
+        self.tile_settings_frame.columnconfigure(1, minsize=self.label_width_tile_settings, weight=0)
+        self.tile_settings_frame.columnconfigure(2, weight=1)
         self.tile_settings_frame.grid(column=1, row=1, sticky=N)
 
+        # Tile Type
+        # Keeps Contents entry from unlocking when it shouldn't
+        self.data['type'].trace_add('write', update_content_type)
+        # The trace registry seems to be a stack structure. The trace registered last is run first.
+        self.data['type'].trace_add('write', update_tile_type)
         ttk.Label(self.tile_settings_frame, text='Tile Type:').grid(column=1, row=next_row(1), sticky=W, pady=4)
-        self.tile_type = self.data['current_tile']['type']
+        self.tile_type = self.data['type']
         self.tile_type_box = ttk.Combobox(self.tile_settings_frame, width=6, textvariable=self.tile_type,
                                           state='readonly', values=('Block', 'BGO'))
         self.tile_type_box.grid(column=2, row=cur_row(), sticky=W)
         CreateToolTip(self.tile_type_box, 'The type of tile.')
+        readonly_widget_map[str(self.tile_type_box)] = True
 
-        ttk.Label(self.tile_settings_frame, text='Tile ID:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.block_id = self.data['current_tile']['id']
-        block_id_entry = ttk.Entry(self.tile_settings_frame, textvariable=self.block_id, width=6)
-        block_id_entry.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(block_id_entry, 'The ID to assign to this tile. Use this to overwrite tiles with special '
-                                      'interactions such as item blocks, spikes, filters, or line guides. Leave this '
-                                      'field blank to automatically assign an ID from the Block or BGO IDs pool.')
+        # Tile ID
+        self.type_selector = VerifiedWidget(ttk.Entry, {'width': 6}, self.tile_settings_frame, variable=self.data['id'],
+                                            good_function=good_tile_id, label_text='Tile ID:',
+                                            label_width=self.label_width_tile_settings,
+                                            tooltip='The ID to assign to this tile. Use this to overwrite tiles with '
+                                                    'special interactions such as item blocks, spikes, filters, '
+                                                    'or line guides. Leave this field blank to automatically assign '
+                                                    'an ID from the Block or BGO IDs pool.\n\n'
+                                                    f'For blocks, this ID must be between 1 and {MAX_BLOCK_ID}.\n'
+                                                    f'For BGOs, it must be between 1 and {MAX_BGO_ID} or between 751 '
+                                                    'and 1000.')
+        self.type_selector.grid(column=1, row=next_row(), columnspan=2, sticky=W)
 
         # Tile Appearance Settings
 
         self.tile_appearance_frame = ttk.LabelFrame(self.tile_settings_frame, text='Appearance', padding='3 3 12 8')
         self.tile_appearance_frame.grid(column=1, columnspan=2, row=next_row(), sticky=(N, W))
+        self.tile_appearance_frame.columnconfigure(1, minsize=self.label_width_appearance, weight=0)
+        self.tile_appearance_frame.columnconfigure(2, weight=1)
 
         # Animation Frames
-        ttk.Label(self.tile_appearance_frame, text='Animation Frames:  ').grid(column=1, row=next_row(1), sticky=W,
-                                                                             pady=4)
-        self.animation_frames = self.data['current_tile']['frames']
-        self.animation_frames_box = ttk.Spinbox(self.tile_appearance_frame, from_=1, to=100,
-                                                textvariable=self.animation_frames, width=6)
-        self.animation_frames_box.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(self.animation_frames_box, 'Number of frames in the tile\'s animation')
+        VerifiedWidget(ttk.Spinbox, {'width': 6}, self.tile_appearance_frame, variable=self.data['frames'], min_val=1,
+                       max_val=1000, label_text='Animation Frames: ', label_width=self.label_width_appearance,
+                       tooltip='Number of frames in the tile\'s animation') \
+            .grid(column=1, row=next_row(), sticky=W)
 
         # Frame Speed
-        ttk.Label(self.tile_appearance_frame, text='Frame Speed:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.frame_speed = self.data['current_tile']['framespeed']
-        self.frame_speed_box = ttk.Spinbox(self.tile_appearance_frame, from_=1, to=128, textvariable=self.frame_speed,
-                                           width=6)
-        self.frame_speed_box.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(self.frame_speed_box, 'Length of each frame of the animation, in game ticks.')
+        VerifiedWidget(ttk.Spinbox, {'width': 6}, self.tile_appearance_frame, variable=self.data['framespeed'],
+                       min_val=1, max_val=100, label_text='Frame Speed: ', label_width=self.label_width_appearance,
+                       tooltip='Length of each frame of the animation, in game ticks.') \
+            .grid(column=1, row=next_row(), sticky=W)
 
-        # Render priority
-        ttk.Label(self.tile_appearance_frame, text='Render Priority:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.render_priority = self.data['current_tile']['priority']
-        self.render_priority_box = ttk.Entry(self.tile_appearance_frame, textvariable=self.render_priority, width=6)
-        self.render_priority_box.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(self.render_priority_box, 'LunaLua render priority. This setting is only available for BGOs.')
+        # Render Priority
+        # Must keep a reference so I can dynamically enable/disable
+        self.render_priority_input = VerifiedWidget(ttk.Spinbox, {'width': 6}, self.tile_appearance_frame,
+                                                    variable=self.data['priority'], min_val=-100, max_val=10,
+                                                    label_text='Render Priority: ',
+                                                    label_width=self.label_width_appearance,
+                                                    tooltip='The tile\'s render priority. This is only available for '
+                                                            'BGOs. Must be between -100 and 10')
+        self.render_priority_input.grid(column=1, row=next_row(), sticky=W)
 
         # No Shadows
-        self.no_shadows = self.data['current_tile']['light_source']
         self.no_shadows_box = ttk.Checkbutton(self.tile_appearance_frame, text='No Shadows',
-                                              variable=self.no_shadows, offvalue=False, onvalue=True)
+                                              variable=self.data['noshadows'], offvalue=False, onvalue=True)
         self.no_shadows_box.grid(column=1, columnspan=2, row=next_row(), sticky=W)
         CreateToolTip(self.no_shadows_box, 'If set to true, the block will not be able to cast shadows in dark '
                                            'sections.')
 
         # Light Source
-        self.is_light_source = self.data['current_tile']['light_source']
+        self.data['light_source'].trace_add('write', update_light_source)
         self.light_source_box = ttk.Checkbutton(self.tile_appearance_frame, text='Light Source',
-                                                variable=self.is_light_source, offvalue=False, onvalue=True)
+                                                variable=self.data['light_source'], offvalue=False, onvalue=True)
         self.light_source_box.grid(column=1, columnspan=2, row=next_row(), sticky=W)
         CreateToolTip(self.light_source_box, 'Whether or not the tile is a light source.')
 
+        # Light Subsection
+        self.light_frame = ttk.Frame(self.tile_appearance_frame)
+        self.light_frame.grid(column=1, columnspan=2, row=next_row(), sticky=W)
+        self.light_frame.columnconfigure(1, minsize=self.label_width_appearance, weight=0)
+        self.light_frame.columnconfigure(2, weight=1)
+
         # Light Offset X
-        ttk.Label(self.tile_appearance_frame, text='Light Offset X:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.light_offset_x = self.data['current_tile']['lightoffsetx']
-        self.light_offset_x_box = ttk.Entry(self.tile_appearance_frame, textvariable=self.light_offset_x, width=6)
-        self.light_offset_x_box.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(self.light_offset_x_box, 'Horizontal offset of the light source relative to the center of the '
-                                               'object.')
+        VerifiedWidget(ttk.Entry, {'width': 6}, self.light_frame, variable=self.data['lightoffsetx'],
+                       label_text='Light Offset X:', label_width=self.label_width_appearance,
+                       tooltip='Horizontal offset of the light source relative to the center of the object.') \
+            .grid(column=1, row=next_row(1), sticky=W)
 
         # Light Offset Y
-        ttk.Label(self.tile_appearance_frame, text='Light Offset Y:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.light_offset_y = self.data['current_tile']['lightoffsety']
-        self.light_offset_y_box = ttk.Entry(self.tile_appearance_frame, textvariable=self.light_offset_y, width=6)
-        self.light_offset_y_box.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(self.light_offset_y_box, 'Vertical offset of the light source relative to the center of the '
-                                               'object.')
+        VerifiedWidget(ttk.Entry, {'width': 6}, self.light_frame, variable=self.data['lightoffsety'],
+                       label_text='Light Offset Y:', label_width=self.label_width_appearance,
+                       tooltip='Vertical offset of the light source relative to the center of the object.') \
+            .grid(column=1, row=next_row(), sticky=W)
 
         # Light Radius
-        ttk.Label(self.tile_appearance_frame, text='Light Radius:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.light_radius = self.data['current_tile']['lightradius']
-        self.light_radius_box = ttk.Entry(self.tile_appearance_frame, textvariable=self.light_radius, width=6)
-        self.light_radius_box.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(self.light_radius_box, 'Radius of the light source.')
+        VerifiedWidget(ttk.Entry, {'width': 6}, self.light_frame, variable=self.data['lightradius'],
+                       label_text='Light Radius:', label_width=self.label_width_appearance,
+                       tooltip='Radius of the light source.') \
+            .grid(column=1, row=next_row(), sticky=W)
 
         # Light Brightness
-        ttk.Label(self.tile_appearance_frame, text='Light Brightness:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.light_brightness = self.data['current_tile']['lightbrightness']
-        self.light_brightness_box = ttk.Entry(self.tile_appearance_frame, textvariable=self.light_brightness, width=6)
-        self.light_brightness_box.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(self.light_brightness_box, 'Brightness of the light source.')
+        VerifiedWidget(ttk.Entry, {'width': 6}, self.light_frame, variable=self.data['lightbrightness'],
+                       label_text='Light Brightness:', label_width=self.label_width_appearance,
+                       tooltip='Brightness of the light source.') \
+            .grid(column=1, row=next_row(), sticky=W)
 
         # Light Color
-        ttk.Label(self.tile_appearance_frame, text='Light Color:').grid(column=1, row=next_row(), sticky=W)
-        self.light_color = self.data['current_tile']['lightcolor']
-        ColorSelector(self.tile_appearance_frame, variable=self.light_color, tooltip='The color of the light source.') \
+        ttk.Label(self.light_frame, text='Light Color:').grid(column=1, row=next_row(), sticky=W)
+        ColorSelector(self.light_frame, variable=self.data['lightcolor'],
+                      tooltip='The color of the light source.') \
             .grid(column=1, columnspan=2, row=next_row(), sticky=W)
+
+        # Light Flicker
+        lf = ttk.Checkbutton(self.light_frame, variable=self.data['lightflicker'],
+                             text='Light Flicker', offvalue=False, onvalue=True)
+        lf.grid(column=1, row=next_row(), sticky=W)
+        CreateToolTip(lf, 'The color of the light source.')
 
         # Tile Behavior Settings
 
         self.tile_behavior_frame = ttk.LabelFrame(self.tile_settings_frame, text='Block Behavior', padding='3 3 12 8')
         self.tile_behavior_frame.grid(column=3, row=3, sticky=(N, S, W), padx=4)
+        self.tile_behavior_frame.columnconfigure(1, minsize=self.label_width_behavior, weight=0)
+        self.tile_behavior_frame.columnconfigure(2, weight=1)
 
         # Collision Type
-        self.collision_type = self.data['current_tile']['collision_type']
+        self.collision_type = self.data['collision_type']
         ttk.Label(self.tile_behavior_frame, text='Collision Type:   ').grid(column=1, row=next_row(1), sticky=W, pady=4)
-        ttk.Combobox(self.tile_behavior_frame, state='readonly', textvariable=self.collision_type, width=12, values=(
-            "Solid", "Semisolid", "Passthrough", "Slope ◢", "Slope ◣", "Slope ◥", "Slope ◤"
-        )).grid(column=2, row=cur_row(), sticky=W)
+        ct = ttk.Combobox(self.tile_behavior_frame, state='readonly', textvariable=self.collision_type, width=12,
+                          values=(
+                              "Solid", "Semisolid", "Passthrough", "Slope ◢", "Slope ◣", "Slope ◥", "Slope ◤"
+                          ))
+        ct.grid(column=2, row=cur_row(), sticky=W)
+        readonly_widget_map[str(ct)] = True
 
         # Content Type
+        self.data['content_type'].trace_add('write', update_content_type)
         ttk.Label(self.tile_behavior_frame, text='Content Type:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.content_type = self.data['current_tile']['content_type']
-        self.content_type_box = ttk.Combobox(self.tile_behavior_frame, state='readonly', textvariable=self.content_type,
-                                             width=12, values=('Empty', 'Coins', 'NPC'))
+        # Keep a reference so I can check the state later
+        self.content_type_box = ttk.Combobox(self.tile_behavior_frame, state='readonly',
+                                             textvariable=self.data['content_type'], width=12,
+                                             values=('Empty', 'Coins', 'NPC'))
         self.content_type_box.grid(column=2, row=cur_row(), sticky=W)
+        readonly_widget_map[str(self.content_type_box)] = True
 
         # Contents
-        ttk.Label(self.tile_behavior_frame, text='Contents:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.contents = self.data['current_tile']['content_id']
-        self.contents_box = ttk.Spinbox(self.tile_behavior_frame, textvariable=self.contents, width=6, from_=1, to=674)
-        self.contents_box.grid(column=2, row=cur_row(), sticky=W)
+        self.contents_box = VerifiedWidget(ttk.Entry, {'width': 6}, self.tile_behavior_frame,
+                                           variable=self.data['content_id'], good_function=good_content_id,
+                                           label_text='Contents:', label_width=self.label_width_behavior,
+                                           tooltip='The contents of the block. Must be between 1 and 99 for coins. '
+                                                   'Must be between 1 and 99 for coins. Must be between 1 and '
+                                                   f'{MAX_NPC_ID} for NPCs.')
+        self.contents_box.grid(column=1, columnspan=2, row=next_row(), sticky=W)
 
         # Smashable
-        ttk.Label(self.tile_behavior_frame, text='Smashable:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.smashable = self.data['current_tile']['smashable']
-        self.smashable_box = ttk.Spinbox(self.tile_behavior_frame, textvariable=self.smashable, width=6, from_=1, to=3)
-        self.smashable_box.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(self.smashable_box, 'Determines how durable the block should be with regards to certain NPCs '
-                                          'that break blocks. Can be a number between 0 and 3. 1 = hit/triggered by '
-                                          'the NPC, but not broken; 2 = broken by the NPC; 3 = effortlessly broken by '
-                                          'the NPC')
+        VerifiedWidget(ttk.Spinbox, {'width': 6}, self.tile_behavior_frame, variable=self.data['smashable'], min_val=0,
+                       max_val=3, label_text='Smashable:', label_width=self.label_width_behavior,
+                       tooltip='Determines how durable the block should be with regards to certain NPCs '
+                               'that break blocks. Can be a number between 0 and 3. 1 = hit/triggered by '
+                               'the NPC, but not broken; 2 = broken by the NPC; 3 = effortlessly broken by '
+                               'the NPC') \
+            .grid(column=1, columnspan=2, row=next_row(), sticky=W)
 
         # Player Filter
-        ttk.Label(self.tile_behavior_frame, text='Player Filter:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.player_filter = self.data['current_tile']['playerfilter']
-        self.player_filter_box = ttk.Entry(self.tile_behavior_frame, textvariable=self.player_filter, width=6)
-        self.player_filter_box.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(self.player_filter_box, 'Character ID that is allowed to pass through this block. -1 means all '
-                                              'character IDs.')
-        
+        VerifiedWidget(ttk.Entry, {'width': 6}, self.tile_behavior_frame, variable=self.data['playerfilter'],
+                       min_val=-1, max_val=16, label_text='Player Filter:', label_width=self.label_width_behavior,
+                       tooltip='Character ID that is allowed to pass through this block. -1 means all character IDs.') \
+            .grid(column=1, columnspan=2, row=next_row(), sticky=W)
+
         # NPC Filter
-        ttk.Label(self.tile_behavior_frame, text='NPC Filter:').grid(column=1, row=next_row(), sticky=W, pady=4)
-        self.npc_filter = self.data['current_tile']['npcfilter']
-        self.npc_filter_box = ttk.Entry(self.tile_behavior_frame, textvariable=self.npc_filter, width=6)
-        self.npc_filter_box.grid(column=2, row=cur_row(), sticky=W)
-        CreateToolTip(self.npc_filter_box, 'NPC ID that is allowed to pass through this block. -1 means all NPC IDs.')
+        VerifiedWidget(ttk.Entry, {'width': 6}, self.tile_behavior_frame, variable=self.data['npcfilter'],
+                       min_val=-1, max_val=16, label_text='NPC Filter:', label_width=self.label_width_behavior,
+                       tooltip='NPC ID that is allowed to pass through this block. -1 means all NPC IDs.') \
+            .grid(column=1, columnspan=2, row=next_row(), sticky=W)
 
         # Sizable
-        self.sizable = self.data['current_tile']['sizable']
+        self.sizable = self.data['sizable']
         self.sizable_box = ttk.Checkbutton(self.tile_behavior_frame, text='Sizable', variable=self.sizable,
                                            offvalue=False, onvalue=True)
         self.sizable_box.grid(column=1, row=next_row(), sticky=W)
         CreateToolTip(self.sizable_box, 'Sizable. If checked, the block should occupy a 3x3 space on the grid. '
                                         'Otherwise, weird things will happen in SMBX. Due to some unfortunate '
                                         'limitations, if you want a sizable that is not semisolid, you\'ll have to '
-                                        'draw it manually in LunaLua.') 
+                                        'draw it manually in LunaLua.')
 
         # Lava
-        self.lava = self.data['current_tile']['lava']
+        self.lava = self.data['lava']
         self.lava_box = ttk.Checkbutton(self.tile_behavior_frame, text='Lava', variable=self.lava, offvalue=False,
                                         onvalue=True)
         self.lava_box.grid(column=1, row=next_row(), sticky=W)
         CreateToolTip(self.lava_box, 'If true, the block acts as lava.')
-        
+
         # P-switch-able
-        self.pswitchable = self.data['current_tile']['pswitchable']
+        self.pswitchable = self.data['pswitchable']
         self.pswitchable_box = ttk.Checkbutton(self.tile_behavior_frame, text='P-Switch-able',
                                                variable=self.pswitchable, offvalue=False, onvalue=True)
         self.pswitchable_box.grid(column=1, row=next_row(), sticky=W)
         CreateToolTip(self.lava_box, 'If true, the block turns into a coin when a P-Switch is hit.')
-        
+
         # Edible By Vine
-        self.ediblebyvine = self.data['current_tile']['ediblebyvine']
+        self.ediblebyvine = self.data['ediblebyvine']
         self.ediblebyvine_box = ttk.Checkbutton(self.tile_behavior_frame, text='Edible By Vine',
                                                 variable=self.ediblebyvine, offvalue=False, onvalue=True)
         self.ediblebyvine_box.grid(column=1, row=next_row(), sticky=W)
         CreateToolTip(self.ediblebyvine_box, 'If set to true, the block can be eaten by Mutant Vine NPCs.')
-        
+
         # Slippery
-        self.slippery = self.data['current_tile']['slippery']
+        self.slippery = self.data['slippery']
         self.slippery_box = ttk.Checkbutton(self.tile_behavior_frame, text='Slippery', variable=self.slippery,
                                             offvalue=False, onvalue=True)
         self.slippery_box.grid(column=2, row=next_row(7), sticky=W)
         CreateToolTip(self.slippery_box, 'If true, the block will be slippery by default.')
-        
+
         # Bumpable
-        self.bumpable = self.data['current_tile']['bumpable']
+        self.bumpable = self.data['bumpable']
         self.bumpable_box = ttk.Checkbutton(self.tile_behavior_frame, text='Bumpable', variable=self.bumpable,
                                             offvalue=False, onvalue=True)
         self.bumpable_box.grid(column=2, row=next_row(), sticky=W)
         CreateToolTip(self.bumpable_box, 'If true, the block can be bumped by players and NPCs.')
-        
+
         # Custom Hurt
-        self.customhurt = self.data['current_tile']['customhurt']
+        self.customhurt = self.data['customhurt']
         self.customhurt_box = ttk.Checkbutton(self.tile_behavior_frame, text='Custom Hurt', variable=self.customhurt,
                                               offvalue=False, onvalue=True)
         self.customhurt_box.grid(column=2, row=next_row(), sticky=W)
