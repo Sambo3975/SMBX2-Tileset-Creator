@@ -395,6 +395,9 @@ def file_open(*args):
     filename = filedialog.askopenfilename(filetypes=(('PNG files', '*.png'), ("All files", "*.*")))
     if file_verify(filename):
 
+        # Clear the leftovers from the last file
+        window.tileset_canvas.delete('all')
+        window.tile_selections = []
         window.tileset_image_zoom = None
 
         data = window.data
