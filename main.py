@@ -15,7 +15,7 @@ Created by Sambo
 """
 
 # TODO: Draw Tile Types (moderate)
-# TODO: Remove Draw Tile Types option (easy)
+# TODO: Add Tile Deletion (right click -> delete or <Delete>), (easy)
 
 from tkinter import *
 from tkinter import ttk, colorchooser, filedialog
@@ -37,7 +37,7 @@ data_defaults = {
 
     'grid_size': '16',
     'show_grid': True,
-    'show_block_types': True,
+    # 'show_block_types': True,
     'highlight_color': '#ff8040',
 
     # Export
@@ -85,7 +85,7 @@ data_defaults = {
     'customhurt': False,
 }
 
-tileset_fields = ['grid_size', 'show_grid', 'show_block_types', 'highlight_color', 'pixel_scale', 'block_ids',
+tileset_fields = ['grid_size', 'show_grid', 'highlight_color', 'pixel_scale', 'block_ids',
                   'bgo_ids',
                   'create_pge_tileset', 'start_high']
 tile_fields = ['tile_type', 'tile_id', 'frames', 'framespeed', 'light_source', 'lightoffsetx', 'lightoffsety',
@@ -211,6 +211,7 @@ def redraw_tileset_image(canvas):
 
     image = window.tileset_image
     if zoom != window.tileset_image_zoom:
+        window.tileset_image_zoom = window.tileset_image_zoom or 1
         canvas.delete('tileset_image')
         image = image.subsample(window.tileset_image_zoom).zoom(zoom)
         canvas.create_image(0, 0, anchor=NW, image=image, tags='tileset_image')
@@ -245,24 +246,24 @@ def file_verify(filename):
     return len(filename) > 0 and filename.lower().endswith('png')
 
 
-def load_data(defaults=None, data_from_file=None):
-    if defaults is None:
-        defaults = data_defaults
-    for k in defaults.keys():
-        if data_from_file is not None and k in data_from_file:
-            v = data_from_file[k]
-        else:
-            v = defaults[k]
-        if isinstance(v, dict):
-            load_data(defaults[k], data_from_file[k])
-        elif isinstance(v, int):
-            data_from_file[k] = IntVar(None, v)
-        elif isinstance(v, bool):
-            data_from_file[k] = BooleanVar(None, v)
-        elif isinstance(v, str):
-            data_from_file[k] = StringVar(None, v)
-        else:
-            raise ValueError(f'Invalid entry: {k}: {v}, ({type(v)})')
+# def load_data(defaults=None, data_from_file=None):
+#     if defaults is None:
+#         defaults = data_defaults
+#     for k in defaults.keys():
+#         if data_from_file is not None and k in data_from_file:
+#             v = data_from_file[k]
+#         else:
+#             v = defaults[k]
+#         if isinstance(v, dict):
+#             load_data(defaults[k], data_from_file[k])
+#         elif isinstance(v, int):
+#             data_from_file[k] = IntVar(None, v)
+#         elif isinstance(v, bool):
+#             data_from_file[k] = BooleanVar(None, v)
+#         elif isinstance(v, str):
+#             data_from_file[k] = StringVar(None, v)
+#         else:
+#             raise ValueError(f'Invalid entry: {k}: {v}, ({type(v)})')
 
 
 built_in_id_lists = {
@@ -394,6 +395,8 @@ def file_open(*args):
     filename = filedialog.askopenfilename(filetypes=(('PNG files', '*.png'), ("All files", "*.*")))
     if file_verify(filename):
 
+        window.tileset_image_zoom = None
+
         data = window.data
 
         window.tileset_image = PhotoImage(file=filename)
@@ -425,6 +428,8 @@ def file_open(*args):
         set_state_all_descendants(window.config_frame, NORMAL)  # Unlock tileset-global controls
         set_state_file_options(NORMAL)
 
+        window.loaded_file = filename
+
 
 def file_save(*args):
     # TODO: File Save (advanced)
@@ -439,8 +444,20 @@ def file_export(*args):
 
 
 def file_close(*args):
-    # TODO: File Close (easy; needs Save Prompt)
-    print('close')
+    """Close the file that is currently open. If there is unsaved data, ask the user if they would like to save
+    first."""
+    if window.data['dirty'] and not save_prompt('closing'):
+        return
+
+    window.tileset_canvas.grid_forget()  # Remove the canvas from the layout
+    window.tileset_frame.configure(width=400, height=300)
+
+    window.loaded_file = ''
+    window.tileset_image = None
+
+    set_state_all_descendants(window.config_frame, DISABLED)
+    set_state_all_descendants(window.tile_frame, DISABLED)
+    set_state_file_options(DISABLED)
 
 
 def change_highlight_color():
@@ -614,7 +631,7 @@ class Window(Tk):
             'highlight_color': StringVar(),
             'grid_size': StringVar(),
             'show_grid': BooleanVar(),
-            'show_block_types': BooleanVar(),
+            # 'show_block_types': BooleanVar(),
 
             'last_good_grid_size': StringVar(self, data_defaults['grid_size']),
 
@@ -683,14 +700,14 @@ class Window(Tk):
 
         # Tileset image display trackers
         # These keep track of what is currently displayed so we know when the display needs to be redrawn
-        self.tileset_image_zoom = 1
+        self.tileset_image_zoom = None
         self.tileset_grid_size = 0
         self.show_grid = True
         # These variable traces trigger a re-draw of the tileset canvas when their targets change
         self.data['last_good_grid_size'].trace_add('write', redraw_canvas)
         self.data['last_good_pixel_scale'].trace_add('write', redraw_canvas)
         self.data['show_grid'].trace_add('write', redraw_canvas)
-        self.data['show_block_types'].trace_add('write', redraw_canvas)
+        # self.data['show_block_types'].trace_add('write', redraw_canvas)
 
         self.label_width_tile_settings = 60
         self.label_width_appearance = 110
@@ -760,8 +777,8 @@ class Window(Tk):
             .grid(column=1, row=next_row(), sticky=W)
 
         # Show Block Types
-        ttk.Checkbutton(self.view_box, text='Show Block Types', variable=self.data['show_block_types'], offvalue=False,
-                        onvalue=True).grid(column=1, row=next_row(), sticky=W)
+        # ttk.Checkbutton(self.view_box, text='Show Block Types', variable=self.data['show_block_types'], offvalue=False,
+        #                 onvalue=True).grid(column=1, row=next_row(), sticky=W)
 
         # Export Settings Section
         label = ttk.Label(self, text='Export Settings')
