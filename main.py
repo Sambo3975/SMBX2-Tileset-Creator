@@ -13,9 +13,14 @@ SMBX doesn't run on anything but Windows (or Wine) anyway.
 
 Created by Sambo
 """
-import tkinter
+
+# TODO: Draw Tile Types (moderate)
+# TODO: Remove Draw Tile Types option (easy)
+
 from tkinter import *
 from tkinter import ttk, colorchooser, filedialog
+from os import path
+import json
 
 import regex as regex
 
@@ -44,12 +49,16 @@ data_defaults = {
     'start_high': False,
 
     # Tile
+    'tile_type': 'Block',
+    'tile_id': '',
 
     # Animation
     'frames': '1',
     'framespeed': '8',
 
     # Light
+    'no_shadows': False,
+    'light_source': False,
     'lightoffsetx': '0',
     'lightoffsety': '0',
     'lightradius': '128',
@@ -61,21 +70,81 @@ data_defaults = {
     'priority': -85,
 
     # Behavior (Block Exclusive)
-    'content_type': 'empty',
-    'content_id': '0',
-
     'collision_type': 'Solid',
+    'content_type': 'Empty',
+    'content_id': '0',
+    'smashable': '0',
+    'playerfilter': '0',
+    'npcfilter': '0',
 
     'sizable': False,
     'pswitchable': False,
     'slippery': False,
     'lava': False,
     'bumpable': False,
-    'smashable': '0',
+    'customhurt': False,
 }
 
+tileset_fields = ['grid_size', 'show_grid', 'show_block_types', 'highlight_color', 'pixel_scale', 'block_ids',
+                  'bgo_ids',
+                  'create_pge_tileset', 'start_high']
+tile_fields = ['tile_type', 'tile_id', 'frames', 'framespeed', 'light_source', 'lightoffsetx', 'lightoffsety',
+               'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker', 'priority', 'content_type', 'content_id',
+               'playerfilter', 'npcfilter', 'collision_type', 'sizable', 'pswitchable', 'slippery', 'lava', 'bumpable',
+               'smashable']
+
+primitive_to_ttk_var = {
+    int: IntVar,
+    bool: BooleanVar,
+    str: StringVar,
+}
+
+# -----------------------------------
+# Widget Availability
+# -----------------------------------
+
+
+readonly_widget_map = {}  # List of readonly widgets (so they can be set back to readonly when unlocked
+
+
+def set_state_all_descendants(frame, state):
+    """
+    Set the state of all of frame's descendants to state.
+    :param frame: The target frame. All widgets under this frame will have their states set
+    :type frame: ttk.Frame | ttk.LabelFrame
+    :param state: The state to set. Widgets in readonly_widget_map will be set to 'readonly' if 'normal' is passed
+    :type state: str
+    :return: None
+    """
+    if type(frame) == ttk.LabelFrame:
+        window.nametowidget(frame.config('labelwidget')[4]).configure(state=state)
+    for x in frame.winfo_children():
+        type_ = type(x)
+        if type_ == ttk.Frame or type_ == ttk.LabelFrame:
+            set_state_all_descendants(x, state)  # Frames do not have a state property, but their children do
+        else:
+            if state == NORMAL and str(x) in readonly_widget_map:
+                x.configure(state='readonly')  # For combo boxes that should be readonly
+            else:
+                x.configure(state=state)
+
+
+def set_state_file_options(state):
+    """
+    Sets the state of all options under the File top-level menu except for Open, which should always be enabled
+    :param state: The state to set
+    :type state: str
+    :return: None
+    """
+    for i in range(1, 4):
+        window.menu_file.entryconfig(i, state=state)
+
+
+# -----------------------------------
+# Layout aides
+# -----------------------------------
+
 current_row = 0
-readonly_widget_map = {}
 
 
 def cur_row():
@@ -91,28 +160,73 @@ def next_row(x=None):
     return current_row
 
 
+# -----------------------------------
+# Error Message Window
+# -----------------------------------
+
+
 def error_msg(msg):
-    print(msg)
+    print(msg)  # Update this to show a modal dialog with the message
+
+
+# -----------------------------------
+# Drawing functions
+# -----------------------------------
 
 
 def redraw_tileset_selections(canvas):
+    # TODO: Redraw Tileset Selections (moderate)
     pass
 
 
 def redraw_tileset_grid(canvas):
-    pass
+    show_grid = window.data['show_grid'].get()
+    grid_size = int(window.data['last_good_grid_size'].get())
+    pixel_scale = int(window.data['last_good_pixel_scale'].get())
+    if window.show_grid and not show_grid or grid_size != window.tileset_grid_size \
+            or pixel_scale != window.tileset_image_zoom:
+        canvas.delete('grid_line')
+        window.tileset_grid_size = grid_size
+        window.tileset_image_zoom = pixel_scale
+    window.show_grid = show_grid
+    if show_grid:
+        image = window.tileset_image
+        grid_square_size = pixel_scale * grid_size
+        w = image.width()
+        h = image.height()
+        vertical_line_count = w // grid_square_size + 1
+        horizontal_line_count = h // grid_square_size + 1
+        dash = (4, 4)
+        for i in range(vertical_line_count + 1):
+            # Create a black and white dashed line
+            canvas.create_line(i * grid_square_size, 0, i * grid_square_size, h, fill='white', tags='grid_line')
+            canvas.create_line(i * grid_square_size, 0, i * grid_square_size, h, dash=dash, tags='grid_line')
+        for i in range(horizontal_line_count + 1):
+            canvas.create_line(0, i * grid_square_size, w, i * grid_square_size, fill='white', tags='grid_line')
+            canvas.create_line(0, i * grid_square_size, w, i * grid_square_size, dash=dash, tags='grid_line')
 
 
 def redraw_tileset_image(canvas):
-    canvas.configure()
+    zoom = int(window.data['last_good_pixel_scale'].get())
+
+    image = window.tileset_image
+    if zoom != window.tileset_image_zoom:
+        canvas.delete('tileset_image')
+        image = image.subsample(window.tileset_image_zoom).zoom(zoom)
+        canvas.create_image(0, 0, anchor=NW, image=image, tags='tileset_image')
+        window.tileset_image = image
+        # window.tileset_image_zoom = zoom
+
+    # Add an extra pixel on the bottom and right for the final grid lines
+    canvas.configure(width=image.width() + 1, height=image.height() + 1)
 
 
-def redraw_canvas():
-    canvas = window.tileset_canvas
-    canvas.delete('all')  # Clear
-    redraw_tileset_image(canvas)
-    redraw_tileset_grid(canvas)
-    redraw_tileset_selections(canvas)
+def redraw_canvas(*args):
+    if not window.freeze_redraw_traces:
+        canvas = window.tileset_canvas
+        redraw_tileset_image(canvas)
+        redraw_tileset_grid(canvas)
+        redraw_tileset_selections(canvas)
 
 
 def save_prompt(action):
@@ -123,6 +237,7 @@ def save_prompt(action):
     :type action str
     :return True if the action should proceed; false otherwise
     """
+    # TODO: Save Prompt (easy)
     return True  # Would you like to save before {action}?
 
 
@@ -227,7 +342,7 @@ def good_tile_id(value):
         return True
     if value == '-':
         return False
-    tile_type = window.data['type'].get()
+    tile_type = window.data['tile_type'].get()
     value = int(value)
     return tile_type == 'Block' and 1 <= value <= MAX_BLOCK_ID \
            or tile_type == 'BGO' and (1 <= value <= MAX_BGO_ID or 751 <= value <= 1000)
@@ -243,18 +358,13 @@ def good_content_id(value):
 
 
 def update_tile_type(*args):
-    tile_type = window.data['type'].get()
+    tile_type = window.data['tile_type'].get()
     if tile_type == 'Block':
         window.render_priority_input.configure(state=DISABLED)
-        for x in window.tile_behavior_frame.winfo_children():
-            if str(x) in readonly_widget_map:
-                x.configure(state='readonly')
-            else:
-                x.configure(state=NORMAL)
+        set_state_all_descendants(window.tile_behavior_frame, NORMAL)
     elif tile_type == 'BGO':
         window.render_priority_input.configure(state=NORMAL)
-        for x in window.tile_behavior_frame.winfo_children():
-            x.configure(state=DISABLED)
+        set_state_all_descendants(window.tile_behavior_frame, DISABLED)
     window.type_selector.check_variable()
 
 
@@ -284,34 +394,57 @@ def file_open(*args):
     filename = filedialog.askopenfilename(filetypes=(('PNG files', '*.png'), ("All files", "*.*")))
     if file_verify(filename):
 
-        try:
-            if len(window.loaded_file) > 0:  # A file is currently open.
-                if not window.data['dirty'] or save_prompt('opening a new tileset'):
-                    # No data will be lost or the user has accepted data loss
-                    window.tileset_image = PhotoImage(filename)
-                    window.tileset_canvas.grid(column=0, row=0)
+        data = window.data
 
-                    redraw_canvas()
-                    window.loaded_file = filename
+        window.tileset_image = PhotoImage(file=filename)
 
-        except TclError:
-            error_msg(f'Error opening file: \'{filename}\'')
+        # Tileset data is stored in a .json file, with the same name as the tileset image, in the same directory as
+        # the image
+        json_path = filename.replace('.png', '.json')
+        if path.exists(json_path):
+            with open(json_path, 'r') as f:
+                file_data = json.loads(f.read())
+        else:
+            file_data = {}
+
+        window.freeze_redraw_traces = True  # Prevent trying to redraw while in the middle of loading tileset data
+
+        # Data fields are set with the following precedence:
+        # 1. Data from the .json file
+        # 2. Defaults
+        for k in tileset_fields:
+            data[k].set(file_data[k] if k in file_data else data_defaults[k])
+
+        # TODO: File Open: Load tiles from the JSON (easy; needs File Save)
+
+        window.freeze_redraw_traces = False
+        redraw_canvas()
+
+        window.tileset_canvas.grid(column=0, row=0)  # Make the canvas visible
+
+        set_state_all_descendants(window.config_frame, NORMAL)  # Unlock tileset-global controls
+        set_state_file_options(NORMAL)
 
 
 def file_save(*args):
+    # TODO: File Save (advanced)
     window.data['dirty'] = False
+    window.save_current_tile()
     print('save')
 
 
 def file_export(*args):
+    # TODO: File Export (advanced; needs File Save)
     print('export')
 
 
 def file_close(*args):
+    # TODO: File Close (easy; needs Save Prompt)
     print('close')
 
 
 def change_highlight_color():
+    # TODO: Change Highlight Color: Update the color of all placed selectors (easy)
     color_code = colorchooser.askcolor(title='Choose Color')
     if color_code is not None:
         color_code = color_code[1]
@@ -326,50 +459,151 @@ def change_highlight_color():
 
 class Window(Tk):
 
-    def _verify_int(self, name, value):
-        widget = self.nametowidget(name)
-        name = name.split('.')[-1]  # Ignore the widget's lineage. I only want its name
-        good_input = value.isdigit()
-        valid = good_input or value == ''
-        if good_input:
+    def _get_mouse_coords(self, event):
+        """Get x, y from a mouse button down event"""
+        # Prevent anything weird from happening if the user clicks in the tiny space where the farthest-right or
+        # farthest-down grid lines reside
+        canvas = self.tileset_canvas
+        x = min(event.x, canvas.winfo_width() - 2)
+        y = min(event.y, canvas.winfo_height() - 2)
+        return x, y
+
+    def _get_grid_aligned_extents(self, start_x, start_y, end_x, end_y):
+        """Get the grid-aligned extents of the area the user is selecting"""
+        gs = self.tileset_grid_size * self.tileset_image_zoom
+        x1 = min(start_x, end_x) // gs * gs
+        y1 = min(start_y, end_y) // gs * gs
+        x2 = (max(start_x, end_x) + gs) // gs * gs
+        y2 = (max(start_y, end_y) + gs) // gs * gs
+        return x1, y1, x2, y2
+
+    def _get_existing_tile(self, x1, y1, x2, y2):
+        canvas = self.tileset_canvas
+        for s in self.tile_selections:
+            (sx1, sy1, sx2, sy2) = canvas.coords(s)
+            if sx1 < x2 and sy1 < y2 and sx2 > x1 and sy2 > y1 and s != self.current_tile_selection:
+                return s
+
+    def _get_tile_selection(self, x1, y1, x2, y2):
+        """Get the tile selection that overlaps the selected area, or create a new one if none overlaps."""
+        existing_selection = self._get_existing_tile(x1, y1, x2, y2)
+        if existing_selection is not None:
+            return existing_selection
+        return self.tileset_canvas.create_rectangle(x1, y1, x2, y2, outline=self.data['highlight_color'].get(), width=3)
+
+    def new_tile(self, selector):
+        """
+        Creates a new tile with all default fields
+        :param selector: The rectangle on the canvas from which to generate the tile
+        :return index: The index in the data['tiles'] array of the new tile
+        """
+        data = self.data
+
+        tile_data = {}
+
+        # Size and positioning
+        (x1, y1, x2, y2) = self.tileset_canvas.coords(selector)
+        tile_data['x1'] = x1
+        tile_data['y1'] = y1
+        tile_data['x2'] = x2
+        tile_data['y2'] = y2
+
+        # Populate the tile fields with the default values
+        for k in tile_fields:
+            tile_data[k] = data_defaults[k]
+
+        data['tiles'].append(tile_data)
+        return len(data['tiles']) - 1
+
+    def load_tile(self, index=None):
+        """Load the tile's settings into the tile settings field. Has no effect if the tile at index is already
+        loaded. """
+        data = self.data
+
+        # If no index is passed, we are loading no tile, and should lock all tile settings fields
+        if index is None:
+            set_state_all_descendants(self.tile_settings_frame, DISABLED)
+            self.current_tile_index = None
+            return
+
+        # If there was previously no index selected, we need to unlock all the tile settings fields
+        if self.current_tile_index is None:
+            set_state_all_descendants(self.tile_settings_frame, NORMAL)
+        if index != self.current_tile_index:
+            self.current_tile_index = index
+            tile_data = data['tiles'][index]
+            for k in tile_fields:
+                data[k].set(tile_data[k])
+
+    def save_current_tile(self):
+        """Copies the values from data into the currently-selected tile. This is run when clicking to select a new
+        tile, and should be called before saving the file. Has no effect if no tile is selected."""
+        if self.current_tile_index is None:
+            return  # No tile selected; nothing to save
+
+        data = self.data
+        tile_data = self.data['tiles'][self.current_tile_index]
+        for k in tile_fields:
+            tile_data[k] = data[k].get()
+
+    def click(self, event):
+        """Called when the user clicks on the tileset canvas. Sets startX, startY, endX, endY, current_tile_selection"""
+
+        self.save_current_tile()
+
+        self.current_tile_selection = None
+
+        (x, y) = self._get_mouse_coords(event)
+
+        (x1, y1, x2, y2) = self._get_grid_aligned_extents(x, y, x, y)
+
+        self.current_tile_selection = self._get_tile_selection(x1, y1, x2, y2)
+
+        self.startX = x
+        self.startY = y
+        self.endX = x
+        self.endY = y
+
+    def drag(self, event):
+        """Called when the user clicks, then drags, the mouse"""
+
+        start_x = self.startX
+        start_y = self.startY
+        (end_x, end_y) = self._get_mouse_coords(event)
+
+        (x1, y1, x2, y2) = self._get_grid_aligned_extents(start_x, start_y, end_x, end_y)
+
+        self.tileset_canvas.coords(self.current_tile_selection, x1, y1, x2, y2)
+
+    def release(self, event):
+        """Called when the user releases the mouse"""
+
+        start_x = self.startX
+        start_y = self.startY
+        (end_x, end_y) = self._get_mouse_coords(event)
+
+        (x1, y1, x2, y2) = self._get_grid_aligned_extents(start_x, start_y, end_x, end_y)
+
+        existing = self._get_existing_tile(x1, y1, x2, y2)
+        if existing is None:
             try:
-                min_val = int(widget.config('from')[4])
-                max_val = int(widget.config('to')[4])
-                good_input = min_val <= int(value) <= max_val
-            except TclError:  # Does not have from and to properties; must check another way
-                int_val = int(value)
-                if name == 'grid_size':
-                    good_input = 8 <= int_val <= 128
-                elif name == 'pixel_scale':
-                    good_input = 1 <= int_val <= 8
-        if good_input:
-            self.data['lv_' + name] = value
-
-        self._update_style(name, good_input)
-
-        self._bell_on_invalid(valid)
-        return valid
+                tile_index = self.tile_selections.index(self.current_tile_selection)
+            except ValueError:
+                tile_index = -1
+            if tile_index == -1:  # New tile
+                self.tile_selections.append(self.current_tile_selection)
+                new_index = self.new_tile(self.current_tile_selection)
+                self.load_tile(new_index)
+            else:  # Tile that already existed
+                self.load_tile(tile_index)
+        else:  # Attempting to create a tile selection that overlaps another is not allowed
+            self.tileset_canvas.delete(self.current_tile_selection)
+            self.load_tile()
 
     def __init__(self):
         super().__init__()
 
-        # Styles for indicating bad inputs
-        # I will ignore bad inputs that are of the right type but not in the acceptable range. This is to avoid a couple
-        # problems I've seen in other programs:
-        # 1. You try to clear the box so you can put in something else, but the empty string is not allowed. You have to
-        #    add the value you want onto the end and then remove the first number. Annoying.
-        # 2. Say the empty string is allowed, but values less than 8 are not. You want to put in 12. You can't type a 1
-        #    or a 2 in the empty box because they're both too low. You are forced to type 812 and then remove the 8.
-        #    Annoying.
-        # How any UX designer notices either of these problems and doesn't immediately fix them is beyond me. /rant
-        # style_bad = ttk.Style()
-        # print(style_bad.theme_names())
-        # style_bad.theme_use('clam')
-        # style_bad.configure('bad.TCombobox', fieldbackground='#f4cccc', foreground='maroon')
-        # style_bad_spinbox = ttk.Style()
-        # style_bad_spinbox.configure('bad.TSpinbox', background='#f4cccc')
-        # style_bad_entry = ttk.Style()
-        # style_bad_entry.configure('bad.TEntry', background='#f4cccc')
+        self.freeze_redraw_traces = False
 
         self.data = {
             # Set to true whenever there are unsaved changes
@@ -382,6 +616,8 @@ class Window(Tk):
             'show_grid': BooleanVar(),
             'show_block_types': BooleanVar(),
 
+            'last_good_grid_size': StringVar(self, data_defaults['grid_size']),
+
             # Export
 
             'pixel_scale': StringVar(),
@@ -390,19 +626,21 @@ class Window(Tk):
             'create_pge_tileset': BooleanVar(),
             'start_high': BooleanVar(),
 
+            'last_good_pixel_scale': StringVar(self, data_defaults['pixel_scale']),
+
             # Current Tile
 
             # Internally assigned
-            'x': IntVar(),
-            'y': IntVar(),
-            'w': IntVar(),
-            'h': IntVar(),
+            'x1': IntVar(),
+            'y1': IntVar(),
+            'x2': IntVar(),
+            'y2': IntVar(),
 
             # Tile Type (Block/BGO)
-            'type': StringVar(),
+            'tile_type': StringVar(),
 
             # Settings for both Blocks and BGOs
-            'id': StringVar(),
+            'tile_id': StringVar(),
             'frames': StringVar(),
             'framespeed': StringVar(),
 
@@ -438,13 +676,25 @@ class Window(Tk):
             'tiles': [],
         }
 
+        # Window settings
+        self.title("SMBX2 Tileset Importer")
+        self.iconbitmap('data/icon.ico')
+        self.resizable(False, False)  # Prevent resizing of the window
+
+        # Tileset image display trackers
+        # These keep track of what is currently displayed so we know when the display needs to be redrawn
+        self.tileset_image_zoom = 1
+        self.tileset_grid_size = 0
+        self.show_grid = True
+        # These variable traces trigger a re-draw of the tileset canvas when their targets change
+        self.data['last_good_grid_size'].trace_add('write', redraw_canvas)
+        self.data['last_good_pixel_scale'].trace_add('write', redraw_canvas)
+        self.data['show_grid'].trace_add('write', redraw_canvas)
+        self.data['show_block_types'].trace_add('write', redraw_canvas)
+
         self.label_width_tile_settings = 60
         self.label_width_appearance = 110
         self.label_width_behavior = 100
-
-        self.title("SMBX2 Tileset Importer")
-        self.iconbitmap('data/icon.ico')
-        self.resizable(False, False)
 
         self.mainframe = ttk.Frame(self, padding="3 3 12 12")  # cover the root with a frame that has a modern style
         self.mainframe.grid(column=0, row=0, sticky=(N, W, E, S))  # placed directly in application window
@@ -464,9 +714,9 @@ class Window(Tk):
         self.menu_file = Menu(self.menu_bar)
         self.menu_bar.add_cascade(menu=self.menu_file, label='File')
         self.menu_file.add_command(label='Open...', command=file_open, accelerator='Ctrl+O')
-        self.menu_file.add_command(label='Save', command=file_save, accelerator='Ctrl+S')
-        self.menu_file.add_command(label='Export...', command=file_export, accelerator='Ctrl+E')
-        self.menu_file.add_command(label='Close', command=file_close, accelerator='Ctrl+W')
+        self.menu_file.add_command(label='Save', command=file_save, accelerator='Ctrl+S', state=DISABLED)
+        self.menu_file.add_command(label='Export...', command=file_export, accelerator='Ctrl+E', state=DISABLED)
+        self.menu_file.add_command(label='Close', command=file_close, accelerator='Ctrl+W', state=DISABLED)
 
         # ------------------------------------------
         # Hotkeys
@@ -486,7 +736,8 @@ class Window(Tk):
 
         # View Section
 
-        self.view_box = ttk.LabelFrame(self.config_frame, text='View', padding='3 3 12 8')
+        label = ttk.Label(self, text='View')  # Using a label widget so I can gray it out when disabled
+        self.view_box = ttk.LabelFrame(self.config_frame, labelwidget=label, padding='3 3 12 8')
         self.view_box.grid(column=1, row=1, sticky=(W, E))
 
         # Highlight Color
@@ -500,7 +751,7 @@ class Window(Tk):
         # Grid Size
         VerifiedWidget(ttk.Combobox, {'values': ('8', '16', '32'), 'width': 6}, self.view_box,
                        variable=self.data['grid_size'], min_val=8, max_val=128, orientation='vertical',
-                       label_text='Grid Size:',
+                       label_text='Grid Size:', last_good_variable=self.data['last_good_grid_size'],
                        tooltip='Size of each grid square in pixels. Must be between 8 and 128, inclusive.') \
             .grid(column=1, row=next_row(), sticky=W)
 
@@ -513,14 +764,14 @@ class Window(Tk):
                         onvalue=True).grid(column=1, row=next_row(), sticky=W)
 
         # Export Settings Section
-
-        self.export_box = ttk.LabelFrame(self.config_frame, text='Export Settings', padding='3 3 12 8')
+        label = ttk.Label(self, text='Export Settings')
+        self.export_box = ttk.LabelFrame(self.config_frame, labelwidget=label, padding='3 3 12 8')
         self.export_box.grid(column=1, row=2, sticky=(N, S, W, E))
 
         # Pixel Scale
         VerifiedWidget(ttk.Combobox, {'values': ('1', '2', '4'), 'width': 6}, self.export_box,
                        variable=self.data['pixel_scale'], min_val=1, max_val=8, orientation='vertical',
-                       label_text='Pixel Scale:',
+                       label_text='Pixel Scale:', last_good_variable=self.data['last_good_pixel_scale'],
                        tooltip='The scale factor that will be applied to the image before exporting as block images. '
                                'Also changes the scale at which the image is displayed in this editor. Must be '
                                'between 1 and 8, inclusive.') \
@@ -576,16 +827,33 @@ class Window(Tk):
         self.tileset_frame = ttk.Frame(self.mainframe, width=400, height=300)
         self.tileset_frame.grid(column=2, row=1, sticky=N)
 
+        # Launch Frame
+        # This is what will be visible on launch. It tells the user that no file is open and offers an open button.
         self.launch_frame = ttk.Frame(self.tileset_frame)
         self.launch_frame.place(in_=self.tileset_frame, anchor='c', relx=.5, rely=.5)
         ttk.Label(self.launch_frame, text='No tileset image currently loaded.', padding='0 0 4 4') \
             .grid(column=1, row=next_row(1))
         ttk.Button(self.launch_frame, text='Open Image', command=file_open).grid(column=1, row=next_row())
 
-        self.loaded_file = ''
+        # Data for the tileset canvas
+        self.loaded_file = ''      # Name of the loaded file
         self.tileset_image = None
+        self.tile_selections = []
+        self.current_tile_index = None
+        self.current_tile_selection = None
+        # Data for clicking and dragging with the mouse
+        self.startX = 0
+        self.startY = 0
+        self.endX = 0
+        self.endY = 0
+
+        # Tileset Canvas
         # No border, no highlight frame (these cause cutoff)
-        self.tileset_canvas = Canvas(self.tileset_frame, width=400, height=300, bd=0, highlightthickness=0)
+        tileset_canvas = Canvas(self.tileset_frame, width=400, height=300, bd=0, highlightthickness=0)
+        tileset_canvas.bind('<Button-1>', self.click)  # Binds a handler to a left-click within the canvas
+        tileset_canvas.bind('<B1-Motion>', self.drag)  # left-click and drag
+        tileset_canvas.bind('<ButtonRelease-1>', self.release)  # release left mouse button
+        self.tileset_canvas = tileset_canvas
 
         # ------------------------------------------
         # Tile Frame
@@ -596,18 +864,19 @@ class Window(Tk):
 
         # Tile Settings
 
-        self.tile_settings_frame = ttk.LabelFrame(self.tile_frame, text='Tile Settings', padding='3 3 12 8')
+        label = ttk.Label(self, text='Tile Settings')
+        self.tile_settings_frame = ttk.LabelFrame(self.tile_frame, labelwidget=label, padding='3 3 12 8')
         self.tile_settings_frame.columnconfigure(1, minsize=self.label_width_tile_settings, weight=0)
         self.tile_settings_frame.columnconfigure(2, weight=1)
         self.tile_settings_frame.grid(column=1, row=1, sticky=N)
 
         # Tile Type
         # Keeps Contents entry from unlocking when it shouldn't
-        self.data['type'].trace_add('write', update_content_type)
+        self.data['tile_type'].trace_add('write', update_content_type)
         # The trace registry seems to be a stack structure. The trace registered last is run first.
-        self.data['type'].trace_add('write', update_tile_type)
+        self.data['tile_type'].trace_add('write', update_tile_type)
         ttk.Label(self.tile_settings_frame, text='Tile Type:').grid(column=1, row=next_row(1), sticky=W, pady=4)
-        self.tile_type = self.data['type']
+        self.tile_type = self.data['tile_type']
         self.tile_type_box = ttk.Combobox(self.tile_settings_frame, width=6, textvariable=self.tile_type,
                                           state='readonly', values=('Block', 'BGO'))
         self.tile_type_box.grid(column=2, row=cur_row(), sticky=W)
@@ -615,9 +884,9 @@ class Window(Tk):
         readonly_widget_map[str(self.tile_type_box)] = True
 
         # Tile ID
-        self.type_selector = VerifiedWidget(ttk.Entry, {'width': 6}, self.tile_settings_frame, variable=self.data['id'],
-                                            good_function=good_tile_id, label_text='Tile ID:',
-                                            label_width=self.label_width_tile_settings,
+        self.type_selector = VerifiedWidget(ttk.Entry, {'width': 6}, self.tile_settings_frame,
+                                            variable=self.data['tile_id'], good_function=good_tile_id,
+                                            label_text='Tile ID:', label_width=self.label_width_tile_settings,
                                             tooltip='The ID to assign to this tile. Use this to overwrite tiles with '
                                                     'special interactions such as item blocks, spikes, filters, '
                                                     'or line guides. Leave this field blank to automatically assign '
@@ -629,7 +898,8 @@ class Window(Tk):
 
         # Tile Appearance Settings
 
-        self.tile_appearance_frame = ttk.LabelFrame(self.tile_settings_frame, text='Appearance', padding='3 3 12 8')
+        label = ttk.Label(self, text='Appearance')
+        self.tile_appearance_frame = ttk.LabelFrame(self.tile_settings_frame, labelwidget=label, padding='3 3 12 8')
         self.tile_appearance_frame.grid(column=1, columnspan=2, row=next_row(), sticky=(N, W))
         self.tile_appearance_frame.columnconfigure(1, minsize=self.label_width_appearance, weight=0)
         self.tile_appearance_frame.columnconfigure(2, weight=1)
@@ -714,7 +984,8 @@ class Window(Tk):
 
         # Tile Behavior Settings
 
-        self.tile_behavior_frame = ttk.LabelFrame(self.tile_settings_frame, text='Block Behavior', padding='3 3 12 8')
+        label = ttk.Label(self, text='Block Behavior')
+        self.tile_behavior_frame = ttk.LabelFrame(self.tile_settings_frame, labelwidget=label, padding='3 3 12 8')
         self.tile_behavior_frame.grid(column=3, row=3, sticky=(N, S, W), padx=4)
         self.tile_behavior_frame.columnconfigure(1, minsize=self.label_width_behavior, weight=0)
         self.tile_behavior_frame.columnconfigure(2, weight=1)
@@ -744,8 +1015,7 @@ class Window(Tk):
                                            variable=self.data['content_id'], good_function=good_content_id,
                                            label_text='Contents:', label_width=self.label_width_behavior,
                                            tooltip='The contents of the block. Must be between 1 and 99 for coins. '
-                                                   'Must be between 1 and 99 for coins. Must be between 1 and '
-                                                   f'{MAX_NPC_ID} for NPCs.')
+                                                   f'Must be between 1 and {MAX_NPC_ID} for NPCs.')
         self.contents_box.grid(column=1, columnspan=2, row=next_row(), sticky=W)
 
         # Smashable
@@ -825,15 +1095,9 @@ class Window(Tk):
                                            'make a block harmful, you must make it replace a harmful block or use '
                                            'LunaLua.')
 
-        # Tile Preview
-
-        # self.preview_box = ttk.LabelFrame(self.tile_frame, text='Preview', padding='3 3 12 8')
-        # self.preview_box.grid(column=1, row=2, sticky=(W, E))
-        # self.preview_box.rowconfigure(0, weight=1)
-        # self.preview_box.columnconfigure(0, weight=1)
-        #
-        # self.preview = Frame(self.preview_box, background='#ff8040', width=32, height=32)
-        # self.preview.grid(column=0, row=0, sticky="")
+        # ----------------------------------------
+        # Post-Construction
+        # ----------------------------------------
 
         # Add some padding to all children
         for child in self.mainframe.winfo_children():
@@ -845,5 +1109,10 @@ class Window(Tk):
 
 if __name__ == '__main__':
     window = Window()
+
+    # Lock up all controls. View and Export controls are unlocked on file open. Tile Settings controls are unlocked
+    # once a tile is selected
+    set_state_all_descendants(window.config_frame, DISABLED)
+    set_state_all_descendants(window.tile_frame, DISABLED)
 
     window.mainloop()

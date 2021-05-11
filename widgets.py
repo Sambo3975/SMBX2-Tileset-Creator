@@ -20,10 +20,14 @@ class ColorSelector(ttk.Frame):
             self.__color_preview.configure(background=color_code[1])
             self.value.set(color_code[1])
 
+    def load_color_data(self, *args):
+        self.__color_preview.configure(background=self.value.get())
+
     def __init__(self, master=None, *, text=None, tooltip=None, variable=None, color='white', **kw):
         super().__init__(master, **kw)
 
         self.value = variable or StringVar(None, color)
+        self.value.trace_add('write', self.load_color_data)
         self.__color_preview = Frame(self, borderwidth=2, relief='sunken', width=23, height=23,
                                      background=color)
         self.__color_preview.grid(column=1, row=1)
@@ -73,8 +77,8 @@ class VerifiedWidget(ttk.Frame):
         elif not good_input and self.good_input:
             self.warning_label.lift()
         self.good_input = good_input
-        if not self.keep_last_good_value or (self.keep_last_good_value and good_input):
-            self.variable.set(value)
+        if self.last_good_variable is not None and good_input:
+            self.last_good_variable.set(value)
 
         if not valid:
             self.bell()
@@ -90,6 +94,7 @@ class VerifiedWidget(ttk.Frame):
         if 'state' in kw:
             for x in self.winfo_children():
                 x['state'] = kw['state']
+
             if not self.good_input:
                 if kw['state'] == DISABLED:
                     # Best not give the user a reason to worry when disabling a widget with a bad value
@@ -101,7 +106,7 @@ class VerifiedWidget(ttk.Frame):
 
     def __init__(self, widget_type, widget_args, master, *, orientation='horizontal', label_text='',
                  label_width=None, verify_function=None, good_function=None, min_val=None, max_val=None, variable=None,
-                 keep_last_good_value=True, warning_label='⚠', tooltip=None, **kw):
+                 warning_label='⚠', tooltip=None, last_good_variable=None, **kw):
         """
         CONSTRUCTOR
         :param widget: A ttk widget.
@@ -118,10 +123,11 @@ class VerifiedWidget(ttk.Frame):
         :param max_val: The highest value the widget will accept.
         :param variable: The variable that this widget will affect
         :type variable: StringVar() | IntVar() | BooleanVar()
-        :param keep_last_good_value: If true, variable will be set to the last valid entered value (this will not
-        change the entered value).
         :param warning_label: The string to display to the right of the widget on bad input. Bad input refers to a valid
         input that is not in the acceptable range, such as an integer that is less than the minimum value.
+        :param last_good_variable: The variable that will store the last good value that was in the field. This
+        variable can be used as a fallback if the widget has a bad value. Should only be used for fields that, when
+        changed, have an effect that is immediately apparent to the user.
         :param kw: Additional arguments to pass to the Frame that will be constructed around the widget.
         """
         super().__init__(master, **kw)
@@ -136,6 +142,10 @@ class VerifiedWidget(ttk.Frame):
             self.columnconfigure(1, minsize=label_width)
 
         self.widget = widget_type(self, **widget_args)
+        try:
+            self.widget.configure(variable=variable)
+        except TclError:
+            self.widget.configure(textvariable=variable)
         self.widget.configure(validate='all', validatecommand=(verify_reg, '%P'))
         if orientation == 'horizontal':
             self.label.grid(pady=4)
@@ -176,7 +186,7 @@ class VerifiedWidget(ttk.Frame):
             self.variable = variable
         else:
             self.variable = StringVar()
-        self.keep_last_good_value = keep_last_good_value
+        self.last_good_variable = last_good_variable
 
 
 if __name__ == '__main__':
