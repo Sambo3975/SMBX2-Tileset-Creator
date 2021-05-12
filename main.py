@@ -14,7 +14,6 @@ SMBX doesn't run on anything but Windows (or Wine) anyway.
 Created by Sambo
 """
 
-# TODO: Draw Tile Types (moderate)
 # TODO: Add Tile Deletion (right click -> delete or <Delete>), (easy)
 
 from tkinter import *
@@ -26,10 +25,13 @@ import regex as regex
 
 from tooltip import CreateToolTip
 from widgets import ColorSelector, VerifiedWidget
+from tile import Tile
 
 MAX_BLOCK_ID = 1291
 MAX_BGO_ID = 303
 MAX_NPC_ID = 674
+
+SELECTOR_BD = 3
 
 data_defaults = {
 
@@ -37,8 +39,7 @@ data_defaults = {
 
     'grid_size': '16',
     'show_grid': True,
-    # 'show_block_types': True,
-    'highlight_color': '#ff8040',
+    'highlight_color': '#ff0080',
 
     # Export
 
@@ -47,42 +48,6 @@ data_defaults = {
     'bgo_ids': 'Avoid Special',
     'create_pge_tileset': True,
     'start_high': False,
-
-    # Tile
-    'tile_type': 'Block',
-    'tile_id': '',
-
-    # Animation
-    'frames': '1',
-    'framespeed': '8',
-
-    # Light
-    'no_shadows': False,
-    'light_source': False,
-    'lightoffsetx': '0',
-    'lightoffsety': '0',
-    'lightradius': '128',
-    'lightbrightness': '1',
-    'lightcolor': '#ffffff',
-    'lightflicker': False,
-
-    # BGO Exclusive
-    'priority': -85,
-
-    # Behavior (Block Exclusive)
-    'collision_type': 'Solid',
-    'content_type': 'Empty',
-    'content_id': '0',
-    'smashable': '0',
-    'playerfilter': '0',
-    'npcfilter': '0',
-
-    'sizable': False,
-    'pswitchable': False,
-    'slippery': False,
-    'lava': False,
-    'bumpable': False,
-    'customhurt': False,
 }
 
 tileset_fields = ['grid_size', 'show_grid', 'highlight_color', 'pixel_scale', 'block_ids',
@@ -175,8 +140,14 @@ def error_msg(msg):
 
 
 def redraw_tileset_selections(canvas):
-    # TODO: Redraw Tileset Selections (moderate)
-    pass
+    show_grid = window.data['show_grid'].get()
+    grid_size = int(window.data['last_good_grid_size'].get())
+    pixel_scale = int(window.data['last_good_pixel_scale'].get())
+
+    # if pixel_scale != window.tileset_image_zoom or grid_size != window.tileset_grid_size or show_grid \
+    #         and not window.show_grid:
+    for t in window.tiles:
+        t.redraw(scale=pixel_scale, **t.data)
 
 
 def redraw_tileset_grid(canvas):
@@ -186,9 +157,6 @@ def redraw_tileset_grid(canvas):
     if window.show_grid and not show_grid or grid_size != window.tileset_grid_size \
             or pixel_scale != window.tileset_image_zoom:
         canvas.delete('grid_line')
-        window.tileset_grid_size = grid_size
-        window.tileset_image_zoom = pixel_scale
-    window.show_grid = show_grid
     if show_grid:
         image = window.tileset_image
         grid_square_size = pixel_scale * grid_size
@@ -216,7 +184,6 @@ def redraw_tileset_image(canvas):
         image = image.subsample(window.tileset_image_zoom).zoom(zoom)
         canvas.create_image(0, 0, anchor=NW, image=image, tags='tileset_image')
         window.tileset_image = image
-        # window.tileset_image_zoom = zoom
 
     # Add an extra pixel on the bottom and right for the final grid lines
     canvas.configure(width=image.width() + 1, height=image.height() + 1)
@@ -228,6 +195,10 @@ def redraw_canvas(*args):
         redraw_tileset_image(canvas)
         redraw_tileset_grid(canvas)
         redraw_tileset_selections(canvas)
+
+        window.show_grid = window.data['show_grid'].get()
+        window.tileset_grid_size = int(window.data['last_good_grid_size'].get())
+        window.tileset_image_zoom = int(window.data['last_good_pixel_scale'].get())
 
 
 def save_prompt(action):
@@ -358,17 +329,6 @@ def good_content_id(value):
            or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
 
 
-def update_tile_type(*args):
-    tile_type = window.data['tile_type'].get()
-    if tile_type == 'Block':
-        window.render_priority_input.configure(state=DISABLED)
-        set_state_all_descendants(window.tile_behavior_frame, NORMAL)
-    elif tile_type == 'BGO':
-        window.render_priority_input.configure(state=NORMAL)
-        set_state_all_descendants(window.tile_behavior_frame, DISABLED)
-    window.type_selector.check_variable()
-
-
 def update_light_source(*args):
     state = NORMAL if window.data['light_source'].get() else DISABLED
     for x in window.light_frame.winfo_children():
@@ -497,19 +457,71 @@ class Window(Tk):
         y2 = (max(start_y, end_y) + gs) // gs * gs
         return x1, y1, x2, y2
 
-    def _get_existing_tile(self, x1, y1, x2, y2):
-        canvas = self.tileset_canvas
-        for s in self.tile_selections:
-            (sx1, sy1, sx2, sy2) = canvas.coords(s)
-            if sx1 < x2 and sy1 < y2 and sx2 > x1 and sy2 > y1 and s != self.current_tile_selection:
-                return s
+    def redraw_current_tile(self, *args):
+        """This handler is called when a setting is changed that alters how the current tile should be drawn"""
+        if self.freeze_redraw_traces:
+            return
 
-    def _get_tile_selection(self, x1, y1, x2, y2):
-        """Get the tile selection that overlaps the selected area, or create a new one if none overlaps."""
-        existing_selection = self._get_existing_tile(x1, y1, x2, y2)
-        if existing_selection is not None:
-            return existing_selection
-        return self.tileset_canvas.create_rectangle(x1, y1, x2, y2, outline=self.data['highlight_color'].get(), width=3)
+        data = self.data
+        self.tiles[self.current_tile_index].redraw(tile_type=data['tile_type'].get(),
+                                                   collision_type=data['collision_type'].get())
+
+    def get_existing_tile(self, selector):
+        """
+        Get the first Tile object that is found to be overlapping with <selector>.
+        :param selector: The index of the tile selector.
+        :type selector: int
+        :return: tuple (index, tile) with index = the index of the overlapping tile in the tiles array or -1
+        if no tile was found and tile = the overlapping Tile object or None if no tile was found.
+        """
+        # """Get the first tile found that is overlapping the bounding box given by x1, y1, x2, y2. Returns None if no
+        # overlapping tiles are found"""
+        # canvas = self.tileset_canvas
+        # tile_selections = self.tile_selections
+        # for i in range(len(tile_selections)):
+        #     s = tile_selections[i]
+        #     (sx1, sy1, sx2, sy2) = canvas.coords(s[0])
+        #     if sx1 < x2 and sy1 < y2 and sx2 > x1 and sy2 > y1 and s[0] != self.current_tile_selection:
+        #         return s[0], i
+
+    # def _get_tile_selection(self, x1, y1, x2, y2):
+    #     """Get the tile selection that overlaps the selected area, or create a new one if none overlaps."""
+    #     existing_selection = self._get_existing_tile(x1, y1, x2, y2)
+    #     if existing_selection is not None:
+    #         return existing_selection
+    #     return self.tileset_canvas.create_rectangle(x1, y1, x2, y2, outline=self.data['highlight_color'].get(), width=3,
+    #                                                 tags='tile_selections')
+
+    def _get_overlapping_tile(self, selector):
+        """Get the index of first Tile that is found to be overlapping <selector>. Return None if no overlapping Tiles
+        are found """
+        for i in range(len(self.tiles)):
+            if self.tiles[i].overlaps(selector):
+                return i
+
+    def change_tile_collision_type(self, *args):
+        """Called whenever the Tile Collision Type field is changed"""
+        if not self.freeze_redraw_traces:
+            index = self.current_tile_index
+            tile_selector_data = self.tile_selections[index]
+
+            # This needs to use the data from data['tiles'] so that we don't have to call .get() on each field.
+            # This means that the tile data needs to be copied to that array first.
+            self.save_current_tile()
+
+            self.tileset_canvas.delete(tile_selector_data[1])
+            tile_selector_data[1] = self.create_tile_type_drawing(self.data['tiles'][index])
+
+    def update_tile_type(self, *args):
+        tile_type = window.data['tile_type'].get()
+        if tile_type == 'Block':
+            window.render_priority_input.configure(state=DISABLED)
+            set_state_all_descendants(window.tile_behavior_frame, NORMAL)
+        elif tile_type == 'BGO':
+            window.render_priority_input.configure(state=NORMAL)
+            set_state_all_descendants(window.tile_behavior_frame, DISABLED)
+        window.type_selector.check_variable()
+        # self.change_tile_collision_type()
 
     def new_tile(self, selector):
         """
@@ -517,23 +529,16 @@ class Window(Tk):
         :param selector: The rectangle on the canvas from which to generate the tile
         :return index: The index in the data['tiles'] array of the new tile
         """
-        data = self.data
+        canvas = self.tileset_canvas
+        color = self.data['highlight_color'].get()
+        (x1, y1, x2, y2) = canvas.coords(selector)
 
-        tile_data = {}
+        new_tile = Tile(canvas, x1, y1, x2, y2, outline=color, width=SELECTOR_BD, scale=self.tileset_image_zoom,
+                        tags='tile_bbox')
 
-        # Size and positioning
-        (x1, y1, x2, y2) = self.tileset_canvas.coords(selector)
-        tile_data['x1'] = x1
-        tile_data['y1'] = y1
-        tile_data['x2'] = x2
-        tile_data['y2'] = y2
+        self.tiles.append(new_tile)
 
-        # Populate the tile fields with the default values
-        for k in tile_fields:
-            tile_data[k] = data_defaults[k]
-
-        data['tiles'].append(tile_data)
-        return len(data['tiles']) - 1
+        return len(self.tiles) - 1
 
     def load_tile(self, index=None):
         """Load the tile's settings into the tile settings field. Has no effect if the tile at index is already
@@ -543,41 +548,74 @@ class Window(Tk):
         # If no index is passed, we are loading no tile, and should lock all tile settings fields
         if index is None:
             set_state_all_descendants(self.tile_settings_frame, DISABLED)
-            self.current_tile_index = None
+            self.current_tile_index = -1
             return
 
         # If there was previously no index selected, we need to unlock all the tile settings fields
-        if self.current_tile_index is None:
+        if self.current_tile_index == -1:
             set_state_all_descendants(self.tile_settings_frame, NORMAL)
+
+        self.freeze_redraw_traces = True
+
         if index != self.current_tile_index:
             self.current_tile_index = index
-            tile_data = data['tiles'][index]
+            tile_data = self.tiles[index]
+            tile_data.select()
             for k in tile_fields:
                 data[k].set(tile_data[k])
+
+        self.freeze_redraw_traces = False
+
+        update_content_type()
 
     def save_current_tile(self):
         """Copies the values from data into the currently-selected tile. This is run when clicking to select a new
         tile, and should be called before saving the file. Has no effect if no tile is selected."""
-        if self.current_tile_index is None:
-            return  # No tile selected; nothing to save
-
-        data = self.data
-        tile_data = self.data['tiles'][self.current_tile_index]
-        for k in tile_fields:
-            tile_data[k] = data[k].get()
+        # if self.current_tile_index == -1:
+        #     return  # No tile selected; nothing to save
+        #
+        # data = self.data
+        # tile_data = self.data['tiles'][self.current_tile_index]
+        # for k in tile_fields:
+        #     tile_data[k] = data[k].get()
+        self.tiles[self.current_tile_index].apply_tile_settings(self.data)
 
     def click(self, event):
         """Called when the user clicks on the tileset canvas. Sets startX, startY, endX, endY, current_tile_selection"""
 
-        self.save_current_tile()
+        # self.save_current_tile()
+        #
+        # self.tileset_canvas.itemconfigure(self.current_tile_selection, outline='')
+        #
+        # old_selection = self.current_tile_selection
+        # self.current_tile_selection = None
+        #
+        # (x, y) = self._get_mouse_coords(event)
+        #
+        # (x1, y1, x2, y2) = self._get_grid_aligned_extents(x, y, x, y)
+        #
+        # self.current_tile_selection = self._get_tile_selection(x1, y1, x2, y2)
+        # if old_selection != self.current_tile_selection:
+        #     self.current_tile_index = -1
+        # self.tileset_canvas.itemconfigure(self.current_tile_selection, outline=self.data['highlight_color'].get())
 
-        self.current_tile_selection = None
+        if self.current_tile_index != -1:
+            self.tiles[self.current_tile_index].deselect()
+            self.save_current_tile()
 
         (x, y) = self._get_mouse_coords(event)
+        color = self.highlight_color.get()
 
         (x1, y1, x2, y2) = self._get_grid_aligned_extents(x, y, x, y)
 
-        self.current_tile_selection = self._get_tile_selection(x1, y1, x2, y2)
+        self.tile_selector = self.tileset_canvas.create_rectangle(x1, y1, x2, y2, outline=color, width=SELECTOR_BD)
+
+        existing_index = self._get_overlapping_tile(self.tile_selector)
+        if existing_index is not None:
+            self.tileset_canvas.delete(self.tile_selector)
+            self.tile_selector = None
+            self.load_tile(existing_index)
+            return
 
         self.startX = x
         self.startY = y
@@ -587,38 +625,54 @@ class Window(Tk):
     def drag(self, event):
         """Called when the user clicks, then drags, the mouse"""
 
+        if self.tile_selector is None:
+            return
+
         start_x = self.startX
         start_y = self.startY
         (end_x, end_y) = self._get_mouse_coords(event)
 
         (x1, y1, x2, y2) = self._get_grid_aligned_extents(start_x, start_y, end_x, end_y)
 
-        self.tileset_canvas.coords(self.current_tile_selection, x1, y1, x2, y2)
+        self.tileset_canvas.coords(self.tile_selector, x1, y1, x2, y2)
 
     def release(self, event):
         """Called when the user releases the mouse"""
 
-        start_x = self.startX
-        start_y = self.startY
-        (end_x, end_y) = self._get_mouse_coords(event)
+        if self.tile_selector is None:
+            return
 
-        (x1, y1, x2, y2) = self._get_grid_aligned_extents(start_x, start_y, end_x, end_y)
+        # start_x = self.startX
+        # start_y = self.startY
+        # (end_x, end_y) = self._get_mouse_coords(event)
+        #
+        # (x1, y1, x2, y2) = self._get_grid_aligned_extents(start_x, start_y, end_x, end_y)
+        #
+        # # Load the tile that goes with the current tile selection
+        # overlapping = self._get_existing_tile(x1, y1, x2, y2)  # Check for any overlapping tiles
+        # if overlapping is None:
+        #     tile_index = self.current_tile_index
+        #     if tile_index == -1:  # New tile
+        #         new_index = self.new_tile(self.current_tile_selection)
+        #         self.load_tile(new_index)
+        #     else:  # Tile that already existed
+        #         self.load_tile(tile_index)
+        # else:  # Attempting to create a tile selection that overlaps another is not allowed
+        #     self.tileset_canvas.delete(self.current_tile_selection)
+        #     self.load_tile()
 
-        existing = self._get_existing_tile(x1, y1, x2, y2)
-        if existing is None:
-            try:
-                tile_index = self.tile_selections.index(self.current_tile_selection)
-            except ValueError:
-                tile_index = -1
-            if tile_index == -1:  # New tile
-                self.tile_selections.append(self.current_tile_selection)
-                new_index = self.new_tile(self.current_tile_selection)
-                self.load_tile(new_index)
-            else:  # Tile that already existed
-                self.load_tile(tile_index)
-        else:  # Attempting to create a tile selection that overlaps another is not allowed
-            self.tileset_canvas.delete(self.current_tile_selection)
+        canvas = self.tileset_canvas
+        selector = self.tile_selector
+
+        already_existing = self._get_overlapping_tile(selector)
+        if already_existing is None:
+            new_index = self.new_tile(selector)
+            self.load_tile(new_index)
+        else:
             self.load_tile()
+
+        canvas.delete(selector)
+        self.tile_selector = None
 
     def __init__(self):
         super().__init__()
@@ -664,7 +718,7 @@ class Window(Tk):
             'frames': StringVar(),
             'framespeed': StringVar(),
 
-            'noshadows': StringVar(),
+            'no_shadows': StringVar(),
             'light_source': BooleanVar(),
             'lightoffsetx': StringVar(),
             'lightoffsety': StringVar(),
@@ -692,8 +746,6 @@ class Window(Tk):
             'bumpable': BooleanVar(),
             'smashable': StringVar(),
             'customhurt': BooleanVar(),
-
-            'tiles': [],
         }
 
         # Window settings
@@ -710,6 +762,9 @@ class Window(Tk):
         self.data['last_good_grid_size'].trace_add('write', redraw_canvas)
         self.data['last_good_pixel_scale'].trace_add('write', redraw_canvas)
         self.data['show_grid'].trace_add('write', redraw_canvas)
+        # These traces trigger a redraw of the current tile
+        self.data['tile_type'].trace_add('write', self.redraw_current_tile)
+        self.data['collision_type'].trace_add('write', self.redraw_current_tile)
         # self.data['show_block_types'].trace_add('write', redraw_canvas)
 
         self.label_width_tile_settings = 60
@@ -776,7 +831,7 @@ class Window(Tk):
             .grid(column=1, row=next_row(), sticky=W)
 
         # Show Grid
-        ttk.Checkbutton(self.view_box, text='Show Grid', variable=self.data['show_grid'], offvalue=False, onvalue=True) \
+        ttk.Checkbutton(self.view_box, text='Show Grid', variable=self.data['show_grid'], offvalue=False, onvalue=True)\
             .grid(column=1, row=next_row(), sticky=W)
 
         # Show Block Types
@@ -856,11 +911,17 @@ class Window(Tk):
         ttk.Button(self.launch_frame, text='Open Image', command=file_open).grid(column=1, row=next_row())
 
         # Data for the tileset canvas
-        self.loaded_file = ''      # Name of the loaded file
+        self.loaded_file = ''  # Name of the loaded file
         self.tileset_image = None
-        self.tile_selections = []
-        self.current_tile_index = None
-        self.current_tile_selection = None
+
+        # self.tile_selections = []
+        # self.current_tile_selection = None
+        # self.current_tile_selection_index = -1
+
+        self.tiles = []
+        self.current_tile_index = -1
+        self.tile_selector = None
+
         # Data for clicking and dragging with the mouse
         self.startX = 0
         self.startY = 0
@@ -894,7 +955,7 @@ class Window(Tk):
         # Keeps Contents entry from unlocking when it shouldn't
         self.data['tile_type'].trace_add('write', update_content_type)
         # The trace registry seems to be a stack structure. The trace registered last is run first.
-        self.data['tile_type'].trace_add('write', update_tile_type)
+        self.data['tile_type'].trace_add('write', self.update_tile_type)
         ttk.Label(self.tile_settings_frame, text='Tile Type:').grid(column=1, row=next_row(1), sticky=W, pady=4)
         self.tile_type = self.data['tile_type']
         self.tile_type_box = ttk.Combobox(self.tile_settings_frame, width=6, textvariable=self.tile_type,
@@ -948,7 +1009,7 @@ class Window(Tk):
 
         # No Shadows
         self.no_shadows_box = ttk.Checkbutton(self.tile_appearance_frame, text='No Shadows',
-                                              variable=self.data['noshadows'], offvalue=False, onvalue=True)
+                                              variable=self.data['no_shadows'], offvalue=False, onvalue=True)
         self.no_shadows_box.grid(column=1, columnspan=2, row=next_row(), sticky=W)
         CreateToolTip(self.no_shadows_box, 'If set to true, the block will not be able to cast shadows in dark '
                                            'sections.')
@@ -1011,9 +1072,10 @@ class Window(Tk):
         self.tile_behavior_frame.columnconfigure(2, weight=1)
 
         # Collision Type
-        self.collision_type = self.data['collision_type']
+        # self.data['collision_type'].trace_add('write', self.update_tile_type)
         ttk.Label(self.tile_behavior_frame, text='Collision Type:   ').grid(column=1, row=next_row(1), sticky=W, pady=4)
-        ct = ttk.Combobox(self.tile_behavior_frame, state='readonly', textvariable=self.collision_type, width=12,
+        ct = ttk.Combobox(self.tile_behavior_frame, state='readonly', textvariable=self.data['collision_type'],
+                          width=12,
                           values=(
                               "Solid", "Semisolid", "Passthrough", "Slope ◢", "Slope ◣", "Slope ◥", "Slope ◤"
                           ))
