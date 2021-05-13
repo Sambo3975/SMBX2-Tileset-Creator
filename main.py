@@ -14,7 +14,6 @@ SMBX doesn't run on anything but Windows (or Wine) anyway.
 Created by Sambo
 """
 
-# TODO: Add Tile Deletion (right click -> delete or <Delete>), (easy)
 
 from tkinter import *
 from tkinter import ttk, colorchooser, filedialog
@@ -557,16 +556,26 @@ class Window(Tk):
 
         self.freeze_redraw_traces = True
 
-        if index != self.current_tile_index:
-            self.current_tile_index = index
-            tile_data = self.tiles[index]
-            tile_data.select()
-            for k in tile_fields:
-                data[k].set(tile_data[k])
+        # if index != self.current_tile_index:
+        self.current_tile_index = index
+        tile_data = self.tiles[index]
+        tile_data.select()
+        for k in tile_fields:
+            data[k].set(tile_data[k])
 
         self.freeze_redraw_traces = False
 
         update_content_type()
+
+    def delete_current_tile(self):
+        """Delete the tile that is currently selected"""
+        index = self.current_tile_index
+        tiles = self.tiles
+        # Since the order of tiles doesn't matter, just fill the deleted tile's place with the last tile
+        if index != len(tiles) - 1:
+            tiles[index] = tiles[-1]
+        del tiles[-1]
+        self.load_tile()
 
     def save_current_tile(self):
         """Copies the values from data into the currently-selected tile. This is run when clicking to select a new
@@ -579,6 +588,25 @@ class Window(Tk):
         # for k in tile_fields:
         #     tile_data[k] = data[k].get()
         self.tiles[self.current_tile_index].apply_tile_settings(self.data)
+
+    def find_tile_under_mouse(self, event):
+        if self.current_tile_index != -1:
+            self.tiles[self.current_tile_index].deselect()
+            self.save_current_tile()
+
+        (x, y) = self._get_mouse_coords(event)
+        color = self.highlight_color.get()
+
+        (x1, y1, x2, y2) = self._get_grid_aligned_extents(x, y, x, y)
+
+        self.tile_selector = self.tileset_canvas.create_rectangle(x1, y1, x2, y2, outline=color, width=SELECTOR_BD)
+
+        overlapping = self._get_overlapping_tile(self.tile_selector)
+        if overlapping is not None:
+            (x1, y1, x2, y2) = self.tileset_canvas.coords(self.tiles[overlapping].bounding_box)
+            self.tileset_canvas.coords(self.tile_selector, x1, y1, x2, y2)
+
+        return overlapping
 
     def click(self, event):
         """Called when the user clicks on the tileset canvas. Sets startX, startY, endX, endY, current_tile_selection"""
@@ -599,18 +627,8 @@ class Window(Tk):
         #     self.current_tile_index = -1
         # self.tileset_canvas.itemconfigure(self.current_tile_selection, outline=self.data['highlight_color'].get())
 
-        if self.current_tile_index != -1:
-            self.tiles[self.current_tile_index].deselect()
-            self.save_current_tile()
-
         (x, y) = self._get_mouse_coords(event)
-        color = self.highlight_color.get()
-
-        (x1, y1, x2, y2) = self._get_grid_aligned_extents(x, y, x, y)
-
-        self.tile_selector = self.tileset_canvas.create_rectangle(x1, y1, x2, y2, outline=color, width=SELECTOR_BD)
-
-        existing_index = self._get_overlapping_tile(self.tile_selector)
+        existing_index = self.find_tile_under_mouse(event)
         if existing_index is not None:
             self.tileset_canvas.delete(self.tile_selector)
             self.tile_selector = None
@@ -674,6 +692,18 @@ class Window(Tk):
         canvas.delete(selector)
         self.tile_selector = None
 
+    def right_click(self, event):
+        x, y = event.x_root, event.y_root
+        existing_index = self.find_tile_under_mouse(event)
+        if existing_index is not None:
+            self.load_tile(existing_index)
+            try:
+                self.canvas_context_menu.tk_popup(x, y)
+            finally:
+                self.canvas_context_menu.grab_release()
+        self.tileset_canvas.delete(self.tile_selector)
+        self.tile_selector = None
+
     def __init__(self):
         super().__init__()
 
@@ -688,7 +718,6 @@ class Window(Tk):
             'highlight_color': StringVar(),
             'grid_size': StringVar(),
             'show_grid': BooleanVar(),
-            # 'show_block_types': BooleanVar(),
 
             'last_good_grid_size': StringVar(self, data_defaults['grid_size']),
 
@@ -935,6 +964,12 @@ class Window(Tk):
         tileset_canvas.bind('<B1-Motion>', self.drag)  # left-click and drag
         tileset_canvas.bind('<ButtonRelease-1>', self.release)  # release left mouse button
         self.tileset_canvas = tileset_canvas
+
+        # Tileset Canvas Context Menu
+        canvas_context_menu = Menu(tileset_canvas, tearoff=0)
+        canvas_context_menu.add_command(label='Delete', command=self.delete_current_tile)
+        self.canvas_context_menu = canvas_context_menu
+        tileset_canvas.bind('<Button-3>', self.right_click)
 
         # ------------------------------------------
         # Tile Frame

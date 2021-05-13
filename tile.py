@@ -278,3 +278,9 @@ class Tile:
         self.bounding_box = canvas.create_rectangle(x1, y1, x2, y2, outline=self.color, width=self.border_width,
                                                     **kwargs)
         self.type_poly = self.draw_type(outline=self.color, width=self.border_width, **kwargs)
+
+    def __del__(self):
+        canvas = self.canvas
+
+        canvas.delete(self.bounding_box)
+        canvas.delete(self.type_poly)
