@@ -83,12 +83,12 @@ defaults = {
     'lightflicker': False,
 
     # BGO Exclusive
-    'priority': -85,
+    'priority': '-85',
 
     # Behavior (Block Exclusive)
     'collision_type': 'Solid',
     'content_type': 'Empty',
-    'content_id': '0',
+    'content_id': '1',
     'smashable': '0',
     'playerfilter': '0',
     'npcfilter': '0',
@@ -99,7 +99,24 @@ defaults = {
     'lava': False,
     'bumpable': False,
     'customhurt': False,
+    'ediblebyvine': False,
 }
+
+# Settings to be checked for all tiles
+unconditional_settings = ['tile_type', 'tile_id', 'frames', 'framespeed', 'no_shadows', 'light_source']
+# Settings for light sources only
+light_settings = ['lightoffsetx', 'lightoffsety', 'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker']
+# Settings for BGOs only
+bgo_settings = ['priority']
+# Settings for Blocks only
+block_settings = ['collision_type', 'content_type', 'smashable', 'playerfilter', 'npcfilter', 'sizable', 'pswitchable',
+                  'slippery', 'lava', 'bumpable', 'customhurt', 'ediblebyvine']
+content_settings = ['content_id']
+# All settings (for load) -- currently unused
+all_settings = ['tile_type', 'tile_id', 'frames', 'framespeed', 'no_shadows', 'light_source', 'lightoffsetx',
+                'lightoffsety', 'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker', 'priority',
+                'collision_type', 'content_type', 'smashable', 'playerfilter', 'npcfilter', 'sizable', 'pswitchable',
+                'slippery', 'lava', 'bumpable', 'customhurt', 'ediblebyvine', 'content_id']
 
 
 class Tile:
@@ -226,13 +243,51 @@ class Tile:
         (ox1, oy1, ox2, oy2) = self.canvas.coords(bbox)
         return sx2 > ox1 and sx1 < ox2 and sy2 > oy1 and sy1 < oy2
 
+    @staticmethod
+    def _collect_non_default_data(keys, data, save_data):
+        """
+        Collect the non-default data values stored at <data>[<keys>] into <save_data>
+        :param keys: The keys to check and possibly copy over
+        :param data: All the Tile's data
+        :param save_data: The data that will be encoded to .json and written to the save file
+        :return:
+        """
+        for k in keys:
+            if data[k] != defaults[k]:
+                save_data[k] = data[k]
+
+    def load_to_ui(self, ui_data):
+        """Load the Tile's data to the UI"""
+        data = self.data
+        for k in data:
+            ui_data[k].set(data[k])
+
     def get_save_ready_data(self):
         """
         Convert the tile's data into a dict object that is ready to be written to a .json file
         :return: A dict containing all non-default configurations.
         """
-        # TODO Tile: Get Save-Ready Data
-        print('File saving is not yet implemented.')
+        data = self.data
+        save_data = {}
+
+        (x1, y1, x2, y2) = self.canvas.coords(self.bounding_box)
+        save_data['x1'] = int(x1)
+        save_data['y1'] = int(y1)
+        save_data['x2'] = int(x2)
+        save_data['y2'] = int(y2)
+
+        self._collect_non_default_data(unconditional_settings, data, save_data)
+        if data['light_source']:
+            self._collect_non_default_data(light_settings, data, save_data)
+        if data['tile_type'] == 'Block':
+            self._collect_non_default_data(block_settings, data, save_data)
+            if data['content_type'] != 'Empty':
+                self._collect_non_default_data(content_settings, data, save_data)
+        else:
+            self._collect_non_default_data(bgo_settings, data, save_data)
+
+        return save_data
+
 
     def get_export_ready_data(self):
         """
@@ -265,7 +320,11 @@ class Tile:
         """
         data = {}
         for k in defaults.keys():
-            data[k] = defaults[k]
+            if k in kwargs:
+                data[k] = kwargs[k]
+                del kwargs[k]  # Remove the key so it won't be passed on to the Canvas items and cause an error
+            else:
+                data[k] = defaults[k]
         self.data = data
 
         self.color = outline or 'black'

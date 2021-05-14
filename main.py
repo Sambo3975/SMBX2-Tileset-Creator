@@ -13,18 +13,34 @@ SMBX doesn't run on anything but Windows (or Wine) anyway.
 
 Created by Sambo
 """
+# Ideas for second release
+# -----------------------------------
+# Option: Tile Padding
+#   Adds gaps between grid squares (tileset creators commonly place a 1 or 2 px gap between tiles)
+# Placement Modes:
+#   Single Solid Tile: Places a single solid tile covering the selected area
+#   Single Auto Tile: Attempts to impute the type of tile from the image data in the selected area
+#   Multi 1x1: Fills the selected area with 1x1 solid tiles; bonus points for handling tiles overlapping the selection
+# Multi Edit:
+#   Select multiple tiles with the selector and edit all at once
+# Tile Error Indicators:
+#   Show an icon over any tile on the canvas with bad settings
 
+# TODO: Error Pop-up (for recoverable errors such as loading bad data or trying to save/export bad data)
+# TODO: Crash Pop-up (for non-recoverable errors, such as unhandled exceptions)
+# TODO: Crash Log (created on crash -- contains the exception type and message)
+# TODO: Filename display (shows the file name in the window title; shows * before the name if there are unsaved changes)
 
 from tkinter import *
 from tkinter import ttk, colorchooser, filedialog
 from os import path
-import json
 
 import regex as regex
 
 from tooltip import CreateToolTip
 from widgets import ColorSelector, VerifiedWidget
 from tile import Tile
+import json
 
 MAX_BLOCK_ID = 1291
 MAX_BGO_ID = 303
@@ -139,8 +155,6 @@ def error_msg(msg):
 
 
 def redraw_tileset_selections(canvas):
-    show_grid = window.data['show_grid'].get()
-    grid_size = int(window.data['last_good_grid_size'].get())
     pixel_scale = int(window.data['last_good_pixel_scale'].get())
 
     # if pixel_scale != window.tileset_image_zoom or grid_size != window.tileset_grid_size or show_grid \
@@ -177,10 +191,13 @@ def redraw_tileset_image(canvas):
     zoom = int(window.data['last_good_pixel_scale'].get())
 
     image = window.tileset_image
-    if zoom != window.tileset_image_zoom:
-        window.tileset_image_zoom = window.tileset_image_zoom or 1
-        canvas.delete('tileset_image')
-        image = image.subsample(window.tileset_image_zoom).zoom(zoom)
+    if zoom != window.tileset_image_zoom or window.loaded_file == '':
+        if zoom != window.tileset_image_zoom:
+            window.tileset_image_zoom = window.tileset_image_zoom or 1
+            if window.loaded_file != '':
+                canvas.delete('tileset_image')
+            image = image.subsample(window.tileset_image_zoom).zoom(zoom)
+
         canvas.create_image(0, 0, anchor=NW, image=image, tags='tileset_image')
         window.tileset_image = image
 
@@ -350,56 +367,6 @@ def update_content_type(*args):
 # ----------------------------
 
 
-def file_open(*args):
-    filename = filedialog.askopenfilename(filetypes=(('PNG files', '*.png'), ("All files", "*.*")))
-    if file_verify(filename):
-
-        # Clear the leftovers from the last file
-        window.tileset_canvas.delete('all')
-        window.tile_selections = []
-        window.tileset_image_zoom = None
-
-        data = window.data
-
-        window.tileset_image = PhotoImage(file=filename)
-
-        # Tileset data is stored in a .json file, with the same name as the tileset image, in the same directory as
-        # the image
-        json_path = filename.replace('.png', '.json')
-        if path.exists(json_path):
-            with open(json_path, 'r') as f:
-                file_data = json.loads(f.read())
-        else:
-            file_data = {}
-
-        window.freeze_redraw_traces = True  # Prevent trying to redraw while in the middle of loading tileset data
-
-        # Data fields are set with the following precedence:
-        # 1. Data from the .json file
-        # 2. Defaults
-        for k in tileset_fields:
-            data[k].set(file_data[k] if k in file_data else data_defaults[k])
-
-        # TODO: File Open: Load tiles from the JSON (easy; needs File Save)
-
-        window.freeze_redraw_traces = False
-        redraw_canvas()
-
-        window.tileset_canvas.grid(column=0, row=0)  # Make the canvas visible
-
-        set_state_all_descendants(window.config_frame, NORMAL)  # Unlock tileset-global controls
-        set_state_file_options(NORMAL)
-
-        window.loaded_file = filename
-
-
-def file_save(*args):
-    # TODO: File Save (advanced)
-    window.data['dirty'] = False
-    window.save_current_tile()
-    print('save')
-
-
 def file_export(*args):
     # TODO: File Export (advanced; needs File Save)
     print('export')
@@ -408,7 +375,9 @@ def file_export(*args):
 def file_close(*args):
     """Close the file that is currently open. If there is unsaved data, ask the user if they would like to save
     first."""
-    if window.data['dirty'] and not save_prompt('closing'):
+    window.freeze_redraw_traces = True  # Prevent trying to redraw while in the middle of loading tileset data
+
+    if window.unsaved_changes and not save_prompt('closing'):
         return
 
     window.tileset_canvas.grid_forget()  # Remove the canvas from the layout
@@ -465,31 +434,76 @@ class Window(Tk):
         self.tiles[self.current_tile_index].redraw(tile_type=data['tile_type'].get(),
                                                    collision_type=data['collision_type'].get())
 
-    def get_existing_tile(self, selector):
-        """
-        Get the first Tile object that is found to be overlapping with <selector>.
-        :param selector: The index of the tile selector.
-        :type selector: int
-        :return: tuple (index, tile) with index = the index of the overlapping tile in the tiles array or -1
-        if no tile was found and tile = the overlapping Tile object or None if no tile was found.
-        """
-        # """Get the first tile found that is overlapping the bounding box given by x1, y1, x2, y2. Returns None if no
-        # overlapping tiles are found"""
-        # canvas = self.tileset_canvas
-        # tile_selections = self.tile_selections
-        # for i in range(len(tile_selections)):
-        #     s = tile_selections[i]
-        #     (sx1, sy1, sx2, sy2) = canvas.coords(s[0])
-        #     if sx1 < x2 and sy1 < y2 and sx2 > x1 and sy2 > y1 and s[0] != self.current_tile_selection:
-        #         return s[0], i
+    def file_save(self, *args):
+        self.save_current_tile()
+        data = self.data
 
-    # def _get_tile_selection(self, x1, y1, x2, y2):
-    #     """Get the tile selection that overlaps the selected area, or create a new one if none overlaps."""
-    #     existing_selection = self._get_existing_tile(x1, y1, x2, y2)
-    #     if existing_selection is not None:
-    #         return existing_selection
-    #     return self.tileset_canvas.create_rectangle(x1, y1, x2, y2, outline=self.data['highlight_color'].get(), width=3,
-    #                                                 tags='tile_selections')
+        # Save the global tileset configurations
+        save_data = {}
+        for k in data_defaults:
+            v = data[k].get()
+            if v != data_defaults[k]:
+                save_data[k] = v
+
+        # Save the tile data
+        tile_save_data = []
+        for x in self.tiles:
+            tile_save_data.append(x.get_save_ready_data())
+        save_data['tiles'] = tile_save_data
+
+        json_filename = self.loaded_file.replace('.png', '.tileset.json')
+        with open(json_filename, 'w') as f:
+            json.dump(save_data, f)
+
+    def file_open(self, *args):
+
+        filename = filedialog.askopenfilename(filetypes=(('PNG files', '*.png'), ("All files", "*.*")))
+        if file_verify(filename):
+
+            # Clear the leftovers from the last file
+            self.tileset_canvas.delete('all')
+            self.tileset_image_zoom = 1
+            window.tiles = []
+
+            data = self.data
+
+            self.tileset_image = PhotoImage(file=filename)
+
+            # Tileset data is stored in a .json file, with the same name as the tileset image, in the same directory as
+            # the image
+            json_path = filename.replace('.png', '.tileset.json')
+            if path.exists(json_path):
+                with open(json_path, 'r') as f:
+                    file_data = json.load(f)
+            else:
+                file_data = {}
+
+            self.freeze_redraw_traces = True  # Prevent trying to redraw while in the middle of loading tileset data
+
+            # Data fields are set with the following precedence:
+            # 1. Data from the .json file
+            # 2. Defaults
+            for k in tileset_fields:
+                data[k].set(file_data[k] if k in file_data else data_defaults[k])
+
+            window.data['last_good_pixel_scale'].set(data['pixel_scale'].get())
+
+            # Load the tiles
+            canvas = self.tileset_canvas
+            if 'tiles' in file_data:
+                for td in file_data['tiles']:
+                    self.tiles.append(Tile(canvas, outline=self.highlight_color.get(),
+                                           width=SELECTOR_BD, scale=int(data['pixel_scale'].get()), **td))
+
+            self.freeze_redraw_traces = False
+            redraw_canvas()
+
+            self.tileset_canvas.grid(column=0, row=0)  # Make the canvas visible
+
+            set_state_all_descendants(self.config_frame, NORMAL)  # Unlock tileset-global controls
+            set_state_file_options(NORMAL)
+
+            self.loaded_file = filename
 
     def _get_overlapping_tile(self, selector):
         """Get the index of first Tile that is found to be overlapping <selector>. Return None if no overlapping Tiles
@@ -560,8 +574,7 @@ class Window(Tk):
         self.current_tile_index = index
         tile_data = self.tiles[index]
         tile_data.select()
-        for k in tile_fields:
-            data[k].set(tile_data[k])
+        tile_data.load_to_ui(self.data)
 
         self.freeze_redraw_traces = False
 
@@ -587,7 +600,8 @@ class Window(Tk):
         # tile_data = self.data['tiles'][self.current_tile_index]
         # for k in tile_fields:
         #     tile_data[k] = data[k].get()
-        self.tiles[self.current_tile_index].apply_tile_settings(self.data)
+        if self.current_tile_index != -1:
+            self.tiles[self.current_tile_index].apply_tile_settings(self.data)
 
     def find_tile_under_mouse(self, event):
         if self.current_tile_index != -1:
@@ -660,25 +674,6 @@ class Window(Tk):
         if self.tile_selector is None:
             return
 
-        # start_x = self.startX
-        # start_y = self.startY
-        # (end_x, end_y) = self._get_mouse_coords(event)
-        #
-        # (x1, y1, x2, y2) = self._get_grid_aligned_extents(start_x, start_y, end_x, end_y)
-        #
-        # # Load the tile that goes with the current tile selection
-        # overlapping = self._get_existing_tile(x1, y1, x2, y2)  # Check for any overlapping tiles
-        # if overlapping is None:
-        #     tile_index = self.current_tile_index
-        #     if tile_index == -1:  # New tile
-        #         new_index = self.new_tile(self.current_tile_selection)
-        #         self.load_tile(new_index)
-        #     else:  # Tile that already existed
-        #         self.load_tile(tile_index)
-        # else:  # Attempting to create a tile selection that overlaps another is not allowed
-        #     self.tileset_canvas.delete(self.current_tile_selection)
-        #     self.load_tile()
-
         canvas = self.tileset_canvas
         selector = self.tile_selector
 
@@ -710,9 +705,6 @@ class Window(Tk):
         self.freeze_redraw_traces = False
 
         self.data = {
-            # Set to true whenever there are unsaved changes
-            'dirty': False,
-
             # View
 
             'highlight_color': StringVar(),
@@ -747,7 +739,7 @@ class Window(Tk):
             'frames': StringVar(),
             'framespeed': StringVar(),
 
-            'no_shadows': StringVar(),
+            'no_shadows': BooleanVar(),
             'light_source': BooleanVar(),
             'lightoffsetx': StringVar(),
             'lightoffsety': StringVar(),
@@ -776,6 +768,7 @@ class Window(Tk):
             'smashable': StringVar(),
             'customhurt': BooleanVar(),
         }
+        self.unsaved_changes = False  # A 'dirty flag' that is set when there are unsaved changes
 
         # Window settings
         self.title("SMBX2 Tileset Importer")
@@ -817,8 +810,8 @@ class Window(Tk):
         # File Menu
         self.menu_file = Menu(self.menu_bar)
         self.menu_bar.add_cascade(menu=self.menu_file, label='File')
-        self.menu_file.add_command(label='Open...', command=file_open, accelerator='Ctrl+O')
-        self.menu_file.add_command(label='Save', command=file_save, accelerator='Ctrl+S', state=DISABLED)
+        self.menu_file.add_command(label='Open...', command=self.file_open, accelerator='Ctrl+O')
+        self.menu_file.add_command(label='Save', command=self.file_save, accelerator='Ctrl+S', state=DISABLED)
         self.menu_file.add_command(label='Export...', command=file_export, accelerator='Ctrl+E', state=DISABLED)
         self.menu_file.add_command(label='Close', command=file_close, accelerator='Ctrl+W', state=DISABLED)
 
@@ -826,8 +819,8 @@ class Window(Tk):
         # Hotkeys
         # ------------------------------------------
 
-        self.bind_all('<Control-o>', file_open)
-        self.bind_all('<Control-s>', file_save)
+        self.bind_all('<Control-o>', self.file_open)
+        self.bind_all('<Control-s>', self.file_save)
         self.bind_all('<Control-e>', file_export)
         self.bind_all('<Control-w>', file_close)
 
@@ -937,7 +930,7 @@ class Window(Tk):
         self.launch_frame.place(in_=self.tileset_frame, anchor='c', relx=.5, rely=.5)
         ttk.Label(self.launch_frame, text='No tileset image currently loaded.', padding='0 0 4 4') \
             .grid(column=1, row=next_row(1))
-        ttk.Button(self.launch_frame, text='Open Image', command=file_open).grid(column=1, row=next_row())
+        ttk.Button(self.launch_frame, text='Open Image', command=self.file_open).grid(column=1, row=next_row())
 
         # Data for the tileset canvas
         self.loaded_file = ''  # Name of the loaded file
