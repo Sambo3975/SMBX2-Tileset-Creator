@@ -29,7 +29,7 @@ Created by Sambo
 # TODO: Error Pop-up (for recoverable errors such as loading bad data or trying to save/export bad data)
 # TODO: Crash Pop-up (for non-recoverable errors, such as unhandled exceptions)
 # TODO: Crash Log (created on crash -- contains the exception type and message)
-# TODO: Filename display (shows the file name in the window title; shows * before the name if there are unsaved changes)
+# TODO: Show indicators for bad tile data on the tileset canvas
 
 from tkinter import *
 from tkinter import ttk, colorchooser, filedialog
@@ -217,40 +217,8 @@ def redraw_canvas(*args):
         window.tileset_image_zoom = int(window.data['last_good_pixel_scale'].get())
 
 
-def save_prompt(action):
-    """
-    Prompts the user to save before completing an action. Offers Yes, No, or Cancel as options. Saves data if Yes is
-    chosen.
-    :arg action text describing the action to take
-    :type action str
-    :return True if the action should proceed; false otherwise
-    """
-    # TODO: Save Prompt (easy)
-    return True  # Would you like to save before {action}?
-
-
 def file_verify(filename):
     return len(filename) > 0 and filename.lower().endswith('png')
-
-
-# def load_data(defaults=None, data_from_file=None):
-#     if defaults is None:
-#         defaults = data_defaults
-#     for k in defaults.keys():
-#         if data_from_file is not None and k in data_from_file:
-#             v = data_from_file[k]
-#         else:
-#             v = defaults[k]
-#         if isinstance(v, dict):
-#             load_data(defaults[k], data_from_file[k])
-#         elif isinstance(v, int):
-#             data_from_file[k] = IntVar(None, v)
-#         elif isinstance(v, bool):
-#             data_from_file[k] = BooleanVar(None, v)
-#         elif isinstance(v, str):
-#             data_from_file[k] = StringVar(None, v)
-#         else:
-#             raise ValueError(f'Invalid entry: {k}: {v}, ({type(v)})')
 
 
 built_in_id_lists = {
@@ -368,27 +336,8 @@ def update_content_type(*args):
 
 
 def file_export(*args):
-    # TODO: File Export (advanced; needs File Save)
+    # TODO: File Export (disallow export if there are files with bad data)
     print('export')
-
-
-def file_close(*args):
-    """Close the file that is currently open. If there is unsaved data, ask the user if they would like to save
-    first."""
-    window.freeze_redraw_traces = True  # Prevent trying to redraw while in the middle of loading tileset data
-
-    if window.unsaved_changes and not save_prompt('closing'):
-        return
-
-    window.tileset_canvas.grid_forget()  # Remove the canvas from the layout
-    window.tileset_frame.configure(width=400, height=300)
-
-    window.loaded_file = ''
-    window.tileset_image = None
-
-    set_state_all_descendants(window.config_frame, DISABLED)
-    set_state_all_descendants(window.tile_frame, DISABLED)
-    set_state_file_options(DISABLED)
 
 
 def change_highlight_color():
@@ -406,6 +355,40 @@ def change_highlight_color():
 
 
 class Window(Tk):
+
+    def save_prompt(self, action):
+        """
+        Prompts the user to save before completing an action. Offers Yes, No, or Cancel as options. Saves data if Yes is
+        chosen.
+        :arg action text describing the action to take
+        :type action str
+        :return True if the action should proceed; false otherwise
+        """
+        # TODO: Save Prompt (easy)
+        return True
+
+    def _update_opened_filename(self, filename):
+        """Update the name of the opened file."""
+        self.loaded_file = filename
+        filename = filename.split('/')[-1].replace('.png', '')
+
+        self.title(self.title().replace(self.loaded_file + ' - ', ''))
+        if filename != '':
+            self.title(f'{filename} - ' + self.title())
+
+    def _set_file_dirty(self, *args):
+        """Set the flag for unsaved changes. This is a callback that will be called whenever a field is changed."""
+        if self.freeze_redraw_traces:
+            return
+
+        if not self.unsaved_changes:
+            self.title('*' + self.title())  # change the window title to indicate unsaved changes
+            self.unsaved_changes = True
+
+    def _clear_file_dirty(self):
+        """Clear the flag for unsaved changes. This should be called from file_save."""
+        self.title(self.title().replace('*', ''))  # Change the window title to indicate there are no unsaved changes
+        self.unsaved_changes = False
 
     def _get_mouse_coords(self, event):
         """Get x, y from a mouse button down event"""
@@ -455,6 +438,8 @@ class Window(Tk):
         with open(json_filename, 'w') as f:
             json.dump(save_data, f)
 
+        self._clear_file_dirty()
+
     def file_open(self, *args):
 
         filename = filedialog.askopenfilename(filetypes=(('PNG files', '*.png'), ("All files", "*.*")))
@@ -503,7 +488,27 @@ class Window(Tk):
             set_state_all_descendants(self.config_frame, NORMAL)  # Unlock tileset-global controls
             set_state_file_options(NORMAL)
 
-            self.loaded_file = filename
+            self._update_opened_filename(filename)
+
+    def file_close(self, *args):
+        """Close the file that is currently open. If there is unsaved data, ask the user if they would like to save
+        first."""
+        self.freeze_redraw_traces = True  # Prevent trying to redraw while in the middle of loading tileset data
+
+        if self.unsaved_changes and not self.save_prompt('closing'):
+            return
+
+        self.tileset_canvas.grid_forget()  # Remove the canvas from the layout
+        self.tileset_frame.configure(width=400, height=300)
+
+        self.tileset_image = None
+
+        set_state_all_descendants(self.config_frame, DISABLED)
+        set_state_all_descendants(self.tile_frame, DISABLED)
+        set_state_file_options(DISABLED)
+
+        self._clear_file_dirty()
+        self._update_opened_filename('')
 
     def _get_overlapping_tile(self, selector):
         """Get the index of first Tile that is found to be overlapping <selector>. Return None if no overlapping Tiles
@@ -550,6 +555,8 @@ class Window(Tk):
                         tags='tile_bbox')
 
         self.tiles.append(new_tile)
+        
+        self._set_file_dirty()
 
         return len(self.tiles) - 1
 
@@ -589,6 +596,8 @@ class Window(Tk):
             tiles[index] = tiles[-1]
         del tiles[-1]
         self.load_tile()
+        
+        self._set_file_dirty()
 
     def save_current_tile(self):
         """Copies the values from data into the currently-selected tile. This is run when clicking to select a new
@@ -726,10 +735,10 @@ class Window(Tk):
             # Current Tile
 
             # Internally assigned
-            'x1': IntVar(),
-            'y1': IntVar(),
-            'x2': IntVar(),
-            'y2': IntVar(),
+            # 'x1': IntVar(),
+            # 'y1': IntVar(),
+            # 'x2': IntVar(),
+            # 'y2': IntVar(),
 
             # Tile Type (Block/BGO)
             'tile_type': StringVar(),
@@ -768,7 +777,11 @@ class Window(Tk):
             'smashable': StringVar(),
             'customhurt': BooleanVar(),
         }
-        self.unsaved_changes = False  # A 'dirty flag' that is set when there are unsaved changes
+
+        # A 'dirty flag' that is set when there are unsaved changes
+        self.unsaved_changes = False
+        for v in self.data.values():
+            v.trace_add('write', self._set_file_dirty)
 
         # Window settings
         self.title("SMBX2 Tileset Importer")
@@ -813,7 +826,7 @@ class Window(Tk):
         self.menu_file.add_command(label='Open...', command=self.file_open, accelerator='Ctrl+O')
         self.menu_file.add_command(label='Save', command=self.file_save, accelerator='Ctrl+S', state=DISABLED)
         self.menu_file.add_command(label='Export...', command=file_export, accelerator='Ctrl+E', state=DISABLED)
-        self.menu_file.add_command(label='Close', command=file_close, accelerator='Ctrl+W', state=DISABLED)
+        self.menu_file.add_command(label='Close', command=self.file_close, accelerator='Ctrl+W', state=DISABLED)
 
         # ------------------------------------------
         # Hotkeys
@@ -822,7 +835,7 @@ class Window(Tk):
         self.bind_all('<Control-o>', self.file_open)
         self.bind_all('<Control-s>', self.file_save)
         self.bind_all('<Control-e>', file_export)
-        self.bind_all('<Control-w>', file_close)
+        self.bind_all('<Control-w>', self.file_close)
 
         # ------------------------------------------
         # Tileset configuration Frame

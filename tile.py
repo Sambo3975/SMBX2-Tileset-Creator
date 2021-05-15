@@ -288,7 +288,6 @@ class Tile:
 
         return save_data
 
-
     def get_export_ready_data(self):
         """
         Convert the Tile's data into strings containing the data in an export-ready format
