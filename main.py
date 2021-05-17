@@ -18,19 +18,27 @@ Created by Sambo
 # Option: Tile Padding
 #   Adds gaps between grid squares (tileset creators commonly place a 1 or 2 px gap between tiles)
 # Placement Modes:
-#   Single Solid Tile: Places a single solid tile covering the selected area
-#   Single Auto Tile: Attempts to impute the type of tile from the image data in the selected area
-#   Multi 1x1: Fills the selected area with 1x1 solid tiles; bonus points for handling tiles overlapping the selection
+#   Single Tile: Places a single solid tile covering the selected area
+#   Multi 1x1: Fills the selected area with 1x1 tiles; bonus points for handling tiles overlapping the selection
+# Impute Tile Types:
+#   Attempts to impute the type of tile from the image data in the selected area (toggleable).
+#   Concept: Take nine 4x4 samples from the selected area; one in each corner, one in the middle of each side, and one
+#   in the center. For each sampled area with any non-transparent pixels, set a flag. This will provide a 'low-res'
+#   approximation of the tile. This information can then be used to attempt to determine the tile type:
+#
+#   111            111    111               111    101                 100           000
+#   111 : Solid    000 OR 111 : Semisolid   101 OR 000 : Passthrough   110 : Slope   000 : No tile (for multi 1x1 mode)
+#   111            000    000               111    101                 111           000
+#
+#   If the pattern does not match, count the flags. If 1 to 3 are set, assume passthrough. Otherwise, assume solid.
 # Multi Edit:
-#   Select multiple tiles with the selector and edit all at once
-# Tile Error Indicators:
-#   Show an icon over any tile on the canvas with bad settings
+#   Select multiple tiles with the selector and edit all at once. Fields that differ between the tiles will be blanked.
+#   Writing to a blanked field will still apply the change to all tiles. Don't know if this is really worth the effort.
 
 # TODO: Error Pop-up (for recoverable errors such as loading bad data or trying to save/export bad data)
 # TODO: Crash Pop-up (for non-recoverable errors, such as unhandled exceptions)
 # TODO: Crash Log (created on crash -- contains the exception type and message)
 # TODO: Show indicators for bad tile data on the tileset canvas
-# TODO: Change Highlight Color: Update the color of all placed selectors (easy)
 
 from functools import lru_cache
 from tkinter import *
@@ -485,9 +493,10 @@ class Window(Tk):
     def _redraw_tiles(self):
         """Redraw all Tiles on top of the grid."""
         pixel_scale = int(self.data['last_good_pixel_scale'].get())
+        color = self.data['highlight_color'].get()
 
         for t in window.tiles:
-            t.redraw(scale=pixel_scale, **t.data)
+            t.redraw(scale=pixel_scale, highlight_color=color, **t.data)
 
     def _redraw_tileset_grid(self, canvas):
         """Redraw the grid if Show Grid is enabled."""
@@ -819,8 +828,9 @@ class Window(Tk):
         self.view_box.grid(column=1, row=1, sticky=(W, E))
 
         # Highlight Color
-        ttk.Label(self.view_box, text='Highlight Color:').grid(column=1, row=next_row(1), sticky=W)
         self.highlight_color = self.data['highlight_color']
+        self.highlight_color.trace_add('write', self.redraw_canvas)
+        ttk.Label(self.view_box, text='Highlight Color:').grid(column=1, row=next_row(1), sticky=W)
         ColorSelector(self.view_box, variable=self.highlight_color, color=data_defaults['highlight_color'],
                       tooltip='Change the color that will be used to highlight selected tiles. Use this if the '
                               'current color does not contrast well with the tile colors.') \
@@ -836,10 +846,6 @@ class Window(Tk):
         # Show Grid
         ttk.Checkbutton(self.view_box, text='Show Grid', variable=self.data['show_grid'], offvalue=False, onvalue=True)\
             .grid(column=1, row=next_row(), sticky=W)
-
-        # Show Block Types
-        # ttk.Checkbutton(self.view_box, text='Show Block Types', variable=self.data['show_block_types'], offvalue=False,
-        #                 onvalue=True).grid(column=1, row=next_row(), sticky=W)
 
         # Export Settings Section
         label = ttk.Label(self, text='Export Settings')
