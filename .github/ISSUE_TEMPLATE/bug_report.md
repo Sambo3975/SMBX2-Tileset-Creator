@@ -21,7 +21,7 @@ Steps to reproduce the behavior:
 A clear and concise description of what you expected to happen.
 
 **Error Traceback**
-If applicable, please include copy and paste the contents of crash_latest.log (this file should be located in SMBX2 Tileset Importer's directory if you've had a crash).
+If applicable, please copy and paste the contents of crash_latest.log (this file should be located in SMBX2 Tileset Importer's directory if you've had a crash).
 
 **Desktop (please complete the following information):**
  - OS: [e.g. iOS]
