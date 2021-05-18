@@ -35,16 +35,15 @@ Created by Sambo
 #   Select multiple tiles with the selector and edit all at once. Fields that differ between the tiles will be blanked.
 #   Writing to a blanked field will still apply the change to all tiles. Don't know if this is really worth the effort.
 
-# TODO: Error Pop-up (for recoverable errors such as loading bad data or trying to save/export bad data)
-# TODO: Crash Pop-up (for non-recoverable errors, such as unhandled exceptions)
 # TODO: Crash Log (created on crash -- contains the exception type and message)
 # TODO: Show indicators for bad tile data on the tileset canvas
-
+import webbrowser
 from functools import lru_cache
 from tkinter import *
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 from os import path
 import json
+from tkinter.messagebox import YESNO
 
 import regex as regex
 
@@ -124,18 +123,30 @@ def next_row(x=None):
 
 class Window(Tk):
 
-    def prompt_dialog(self, type_, message, yes_command=None, no_command=None):
+    @staticmethod
+    def warning_prompt(title, message):
         """
-        Show a modal prompt dialog with the given message.
-        :param type_: The type of prompt. Must be one of 'option', 'error', or 'fatal'. An 'option' dialog provides 3
-        options: Yes, No, and Cancel. 'error' and 'fatal' dialogs only have an OK button. A 'fatal' dialog will
-        terminate the program when closed.
-        :param message: True if the action should proceed. False otherwise. Will only return False if the type is
-        'option' and the user selects Cancel
-        :param yes_command: The function to call if Yes is selected. Only applies to an 'option' dialog.
-        :param no_command: The function to call if No is selected. Only applies to an 'option' dialog.
+        Display a warning message to the user. This is for issues such as opening or exporting files with bad data.
+        :param title: The title of the warning prompt.
+        :param message: The message to display.
+        :return: None
+        """
+        messagebox.showwarning(title, message)
+
+    def crash_prompt(self, *args):
+        """
+        Display a crash message before terminating execution. Offer the option to report the error on the GitHub page.
         :return:
         """
+        res = messagebox.showerror('Fatal Error', "Unfortunately, SMBX2 Tileset Importer has crashed. Would you like "
+                                                  "to report this error on the software's GitHub page? If so, be sure "
+                                                  "to include the contents of crash_latest.log (located in this "
+                                                  "program's directory) in your report.", type=YESNO)
+        if res == 'yes':
+            webbrowser.open_new('https://github.com/Sambo3975/SMBX2-Tileset-Creator/issues/new?assignees=&labels'
+                                '=&template=bug_report.md&title=')
+
+        self.destroy()
 
     def save_prompt(self, action):
         """
@@ -145,8 +156,12 @@ class Window(Tk):
         :type action str
         :return True if the action should proceed; false otherwise
         """
-        # TODO: Save Prompt (easy)
-        return True
+        response = messagebox.askyesnocancel('Save', f'Save before {action}?')
+        if response is not None:
+            if response:
+                self.file_save()
+            return True
+        return False
 
     # ---------------------------------
     # File Commands
@@ -225,6 +240,8 @@ class Window(Tk):
             self.set_state_file_options(NORMAL)
 
             self._update_opened_filename(filename)
+        else:
+            self.warning_prompt('Unable to Open', f"Could not open file '{filename}' because it is not a .png")
 
     def file_save(self, *args):
         """Save the file that is currently opened."""
@@ -252,14 +269,15 @@ class Window(Tk):
 
     def file_export(self, *args):
         # TODO: File Export (disallow export if there are Tiles with bad data)
-        print('export')
+        # self.warning_prompt("Not Implemented", "Can't export yet. Sorry :/")
+        raise NotImplementedError("Can't export yet.")
 
     def file_close(self, *args):
         """Close the file that is currently open. If there is unsaved data, ask the user if they would like to save
         first."""
         self.freeze_redraw_traces = True  # Prevent trying to redraw while in the middle of loading tileset data
 
-        if self.unsaved_changes and not self.save_prompt('closing'):
+        if self.unsaved_changes and not self.save_prompt('closing the current file'):
             return
 
         self.tileset_canvas.grid_forget()  # Remove the canvas from the layout
@@ -1208,8 +1226,10 @@ class Window(Tk):
         self.set_state_all_descendants(self.config_frame, DISABLED)
         self.set_state_all_descendants(self.tile_frame, DISABLED)
 
+        # Add an exception handler that will allow us to log errors and such.
+        Tk.report_callback_exception = self.crash_prompt
+
 
 if __name__ == '__main__':
     window = Window()
-
     window.mainloop()
