@@ -220,8 +220,6 @@ class Tile:
 
         # Ensure that the tile is always rendered above the grid.
         # highest_above = canvas.find_above(self.bounding_box)
-        # if highest_above != ():
-        #     canvas.tag_raise(self.bounding_box, highest_above)
         canvas.tag_raise(self.bounding_box)
         canvas.tag_raise(self.type_poly)
 

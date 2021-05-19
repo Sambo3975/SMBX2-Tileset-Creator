@@ -37,13 +37,13 @@ Created by Sambo
 
 # TODO: Crash Log (created on crash -- contains the exception type and message)
 # TODO: Show indicators for bad tile data on the tileset canvas
+# TODO: Migrate validation functions for individual tiles to Tile
 import webbrowser
 from functools import lru_cache
 from tkinter import *
 from tkinter import ttk, filedialog, messagebox
 from os import path
 import json
-from tkinter.messagebox import YESNO
 
 import regex as regex
 
@@ -141,7 +141,7 @@ class Window(Tk):
         res = messagebox.showerror('Fatal Error', "Unfortunately, SMBX2 Tileset Importer has crashed. Would you like "
                                                   "to report this error on the software's GitHub page? If so, be sure "
                                                   "to include the contents of crash_latest.log (located in this "
-                                                  "program's directory) in your report.", type=YESNO)
+                                                  "program's directory) in your report.", type=messagebox.YESNO)
         if res == 'yes':
             webbrowser.open_new('https://github.com/Sambo3975/SMBX2-Tileset-Creator/issues/new?assignees=&labels'
                                 '=&template=bug_report.md&title=')
@@ -169,12 +169,16 @@ class Window(Tk):
 
     def _update_opened_filename(self, filename):
         """Update the name of the opened file."""
+        old_file = self.loaded_file.split('/')[-1].replace('.png', '')
+        new_file = filename.split('/')[-1].replace('.png', '')
+        if old_file != new_file:
+            if old_file == '':
+                self.title(' - ' + self.title())
+            if new_file != '':
+                self.title(self.title().replace(old_file, new_file, 1))
+            else:
+                self.title(self.title().replace(old_file + ' - ', '', 1))
         self.loaded_file = filename
-        filename = filename.split('/')[-1].replace('.png', '')
-
-        self.title(self.title().replace(self.loaded_file + ' - ', ''))
-        if filename != '':
-            self.title(f'{filename} - ' + self.title())
 
     def _set_file_dirty(self, *args):
         """Set the flag for unsaved changes. This is a callback that will be called whenever a field is changed."""
@@ -197,6 +201,7 @@ class Window(Tk):
         if self._file_verify(filename):
 
             # Clear the leftovers from the last file
+            self.current_tile_index = -1
             self.tileset_canvas.delete('all')
             self.tileset_image_zoom = 1
             window.tiles = []

@@ -102,6 +102,15 @@ class VerifiedWidget(ttk.Frame):
                 else:
                     self.warning_label.lift()
             del kw['state']
+        if 'variable' in kw:
+            variable = kw['variable']
+            try:
+                self.widget.configure(variable=variable)
+            except TclError:
+                self.widget.configure(textvariable=variable)
+            self.variable = variable
+            self.check_variable()
+            del kw['variable']
         super(VerifiedWidget, self).configure(cnf, **kw)
 
     def __init__(self, widget_type, widget_args, master, *, orientation='horizontal', label_text='',
