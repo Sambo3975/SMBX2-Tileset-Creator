@@ -254,11 +254,13 @@ class Tile:
             if data[k] != defaults[k]:
                 save_data[k] = data[k]
 
-    def load_to_ui(self, ui_data):
+    def load_to_ui(self, ui_data, ui_inputs):
         """Load the Tile's data to the UI"""
         data = self.data
         for k in data:
             ui_data[k].set(data[k])
+            if k in ui_inputs:
+                ui_inputs[k].check_variable()
 
     def get_save_ready_data(self):
         """
