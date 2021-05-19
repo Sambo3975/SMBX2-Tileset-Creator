@@ -138,15 +138,19 @@ class Window(Tk):
         Display a crash message before terminating execution. Offer the option to report the error on the GitHub page.
         :return:
         """
-        res = messagebox.showerror('Fatal Error', "Unfortunately, SMBX2 Tileset Importer has crashed. Would you like "
-                                                  "to report this error on the software's GitHub page? If so, be sure "
-                                                  "to include the contents of crash_latest.log (located in this "
-                                                  "program's directory) in your report.", type=messagebox.YESNO)
-        if res == 'yes':
-            webbrowser.open_new('https://github.com/Sambo3975/SMBX2-Tileset-Creator/issues/new?assignees=&labels'
-                                '=&template=bug_report.md&title=')
+        if not self.crashed:
+            self.crashed = True  # Don't want show additional errors directly caused by the first one.
 
-        self.destroy()
+            res = messagebox.showerror('Fatal Error', "Unfortunately, SMBX2 Tileset Importer has crashed. Would you "
+                                                      "like to report this error on the software's GitHub page? If so, "
+                                                      "be sure to include the contents of crash_latest.log (located in "
+                                                      "this program's directory) in your report.",
+                                       type=messagebox.YESNO)
+            if res == 'yes':
+                webbrowser.open_new('https://github.com/Sambo3975/SMBX2-Tileset-Creator/issues/new?assignees=&labels'
+                                    '=&template=bug_report.md&title=')
+
+            self.destroy()
 
     def save_prompt(self, action):
         """
@@ -227,7 +231,7 @@ class Window(Tk):
             for k in tileset_fields:
                 data[k].set(file_data[k] if k in file_data else data_defaults[k])
 
-            window.data['last_good_pixel_scale'].set(data['pixel_scale'].get())
+            # window.data['last_good_pixel_scale'].set(data['pixel_scale'].get())
 
             # Load the tiles
             canvas = self.tileset_canvas
@@ -245,13 +249,19 @@ class Window(Tk):
             self.set_state_file_options(NORMAL)
 
             self._update_opened_filename(filename)
-        else:
+        elif filename != '':
             self.warning_prompt('Unable to Open', f"Could not open file '{filename}' because it is not a .png")
 
     def file_save(self, *args):
         """Save the file that is currently opened."""
         self.save_current_tile()
         data = self.data
+
+        # Force the grid size and pixel scale to their last valid values
+        data['grid_size'].set(data['last_good_grid_size'].get())
+        data['pixel_scale'].set(data['last_good_pixel_scale'].get())
+        self.pixel_scale_box.check_variable()
+        self.grid_size_box.check_variable()
 
         # Save the global tileset configurations
         save_data = {}
@@ -356,7 +366,7 @@ class Window(Tk):
                         tags='tile_bbox')
 
         self.tiles.append(new_tile)
-        
+
         self._set_file_dirty()
 
         return len(self.tiles) - 1
@@ -397,7 +407,7 @@ class Window(Tk):
             tiles[index] = tiles[-1]
         del tiles[-1]
         self.load_tile()
-        
+
         self._set_file_dirty()
 
     def save_current_tile(self):
@@ -655,17 +665,17 @@ class Window(Tk):
         value = int(value)
 
         return tile_type == 'Block' and 1 <= value <= MAX_BLOCK_ID \
-            or tile_type == 'BGO' and (1 <= value <= MAX_BGO_ID or 751 <= value <= 1000)
+               or tile_type == 'BGO' and (1 <= value <= MAX_BGO_ID or 751 <= value <= 1000)
 
     def good_content_id(self, value):
         if value == '':
             return False
-        
+
         content_type = self.data['content_type'].get()
         value = int(value)
-        
+
         return content_type == 'Coins' and 1 <= value <= 99 \
-            or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
+               or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
 
     # ---------------------------------
     # Widget Access Management
@@ -787,6 +797,7 @@ class Window(Tk):
         self.title("SMBX2 Tileset Importer")
         self.iconbitmap('data/icon.ico')
         self.resizable(False, False)  # Prevent resizing of the window
+        self.crashed = False
 
         # Tileset image display trackers
         # These keep track of what is currently displayed so we know when the display needs to be redrawn
@@ -860,14 +871,16 @@ class Window(Tk):
             .grid(column=1, row=next_row(), sticky=W)
 
         # Grid Size
-        VerifiedWidget(ttk.Combobox, {'values': ('8', '16', '32'), 'width': 6}, self.view_box,
-                       variable=self.data['grid_size'], min_val=8, max_val=128, orientation='vertical',
-                       label_text='Grid Size:', last_good_variable=self.data['last_good_grid_size'],
-                       tooltip='Size of each grid square in pixels. Must be between 8 and 128, inclusive.') \
-            .grid(column=1, row=next_row(), sticky=W)
+        grid_size_box = VerifiedWidget(ttk.Combobox, {'values': ('8', '16', '32'), 'width': 6}, self.view_box,
+                                       variable=self.data['grid_size'], min_val=8, max_val=128, orientation='vertical',
+                                       label_text='Grid Size:', last_good_variable=self.data['last_good_grid_size'],
+                                       tooltip='Size of each grid square in pixels. Must be between 8 and 128, '
+                                               'inclusive.')
+        grid_size_box.grid(column=1, row=next_row(), sticky=W)
+        self.grid_size_box = grid_size_box
 
         # Show Grid
-        ttk.Checkbutton(self.view_box, text='Show Grid', variable=self.data['show_grid'], offvalue=False, onvalue=True)\
+        ttk.Checkbutton(self.view_box, text='Show Grid', variable=self.data['show_grid'], offvalue=False, onvalue=True) \
             .grid(column=1, row=next_row(), sticky=W)
 
         # Export Settings Section
@@ -876,13 +889,16 @@ class Window(Tk):
         self.export_box.grid(column=1, row=2, sticky=(N, S, W, E))
 
         # Pixel Scale
-        VerifiedWidget(ttk.Combobox, {'values': ('1', '2', '4'), 'width': 6}, self.export_box,
-                       variable=self.data['pixel_scale'], min_val=1, max_val=8, orientation='vertical',
-                       label_text='Pixel Scale:', last_good_variable=self.data['last_good_pixel_scale'],
-                       tooltip='The scale factor that will be applied to the image before exporting as block images. '
-                               'Also changes the scale at which the image is displayed in this editor. Must be '
-                               'between 1 and 8, inclusive.') \
-            .grid(column=1, row=next_row(), sticky=W)
+        pixel_scale_box = VerifiedWidget(ttk.Combobox, {'values': ('1', '2', '4'), 'width': 6}, self.export_box,
+                                         variable=self.data['pixel_scale'], min_val=1, max_val=8,
+                                         orientation='vertical',
+                                         label_text='Pixel Scale:',
+                                         last_good_variable=self.data['last_good_pixel_scale'],
+                                         tooltip='The scale factor that will be applied to the image before exporting '
+                                                 'as block images. Also changes the scale at which the image is '
+                                                 'displayed in this editor. Must be between 1 and 8, inclusive.')
+        pixel_scale_box.grid(column=1, row=next_row(), sticky=W)
+        self.pixel_scale_box = pixel_scale_box
 
         # Block IDs
         VerifiedWidget(ttk.Combobox, {'values': ('Avoid Special', 'User Slots', ''), 'width': 12}, self.export_box,
