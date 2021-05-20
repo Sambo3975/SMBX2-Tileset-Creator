@@ -6,6 +6,7 @@ Contains all the data needed to create a Block or BGO in SMBX2
 # -------------------------------
 # Tile Type Drawing Functions
 # -------------------------------
+from tkinter import PhotoImage, NW, NORMAL, HIDDEN
 
 TILE_INSET = 6
 T = TILE_INSET
@@ -19,8 +20,6 @@ def draw_square_tile(c, x1, y1, x2, y2, passthrough=False):
 
 
 def draw_semisolid(c, x1, y1, x2, y2):
-    # return c.create_polygon(x1 + T, y1 + T, x2 - T, y1 + T, x2 - T, y2 - T, x1 + T, y2 - T, x1 + T, y1 + T,
-    #                         (x1 + x2) // 2, (y1 + y2) // 2, x2 - T, y2 + T)
     return c.create_polygon(x1 + T, y1 + T, x2 - T, y1 + T, x2 - T, y2 - T, x1 + T, y2 - T, x1 + T, y1 + T,
                             (x1 + x2) // 2, (y1 + y2) // 2, x2 - T, y1 + T)
 
@@ -161,6 +160,16 @@ class Tile:
             self.type_poly = self.draw_type()
             self.scale = scale
 
+    def increment_bad_field_count(self):
+        self.bad_field_count += 1
+        if self.bad_field_count == 1:
+            self.redraw()
+
+    def decrement_bad_field_count(self):
+        self.bad_field_count = max(self.bad_field_count - 1, 0)
+        if self.bad_field_count == 0:
+            self.redraw()
+
     def draw_type(self, tile_type=None, collision_type=None, **kwargs):
         """Draw a little picture showing the Tile's type"""
         tile_data = self.data
@@ -176,6 +185,15 @@ class Tile:
         canvas.itemconfigure(poly, outline=self.color, width=self.border_width, fill='', **kwargs)
 
         return poly
+
+    def draw_error_indicator(self):
+        canvas = self.canvas
+
+        if self.error_indicator is not None:
+            canvas.delete(self.error_indicator)
+
+        (x, y, *_) = canvas.coords(self.bounding_box)
+        return canvas.create_image(x + 1, y + 1, anchor=NW, image=self.error_image, tags='bad_ind')
 
     def redraw(self, **tile_data):
         """Redraw the Tile"""
@@ -218,10 +236,17 @@ class Tile:
 
             self.color = color
 
+        self.error_indicator = self.draw_error_indicator()
+        if self.bad_field_count > 0:
+            self.canvas.itemconfigure(self.error_indicator, state=NORMAL)
+        else:
+            self.canvas.itemconfigure(self.error_indicator, state=HIDDEN)
+
         # Ensure that the tile is always rendered above the grid.
         # highest_above = canvas.find_above(self.bounding_box)
         canvas.tag_raise(self.bounding_box)
         canvas.tag_raise(self.type_poly)
+        canvas.tag_raise(self.error_indicator)
 
     def select(self):
         self.selected = True
@@ -317,6 +342,8 @@ class Tile:
         :param kwargs: Settings to apply to the bounding box. Accepts any named arguments that can be passed to
         tkinter.Canvas.itemconfigure
         """
+        self.error_image = PhotoImage(file='data/tile_error.png')
+
         data = {}
         for k in defaults.keys():
             if k in kwargs:
@@ -336,6 +363,10 @@ class Tile:
         self.bounding_box = canvas.create_rectangle(x1, y1, x2, y2, outline=self.color, width=self.border_width,
                                                     **kwargs)
         self.type_poly = self.draw_type(outline=self.color, width=self.border_width, **kwargs)
+
+        self.bad_field_count = 0
+        self.error_indicator = None
+        self.error_indicator = self.draw_error_indicator()
 
     def __del__(self):
         canvas = self.canvas

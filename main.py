@@ -141,7 +141,7 @@ class Window(Tk):
         filepath = pathlib.Path('logs/crash_latest.log')
         if filepath.exists():
             # Old crash logs have the date and time of the crash in the name
-            last_mod_time = datetime.fromtimestamp(filepath.stat().st_ctime).strftime("%Y_%d_%H_%M_%S")
+            last_mod_time = datetime.fromtimestamp(filepath.stat().st_mtime).strftime("%Y_%m_%d_%H_%M_%S")
             os.rename('logs/crash_latest.log', f'logs/crash_{last_mod_time}.log')
         with open('logs/crash_latest.log', 'w') as f:  # crash_latest will always contain the most recent crash
             traceback.print_exception(exception, message, tb, file=f)
@@ -257,6 +257,12 @@ class Window(Tk):
                     self.tiles.append(Tile(canvas, outline=self.highlight_color.get(),
                                            width=SELECTOR_BD, scale=int(data['pixel_scale'].get()), **td))
 
+            # Load each tile into the UI once so its fields are checked.
+            for i in range(len(self.tiles)):
+                self.load_tile(i)
+                self.tiles[i].deselect()
+            self.load_tile()
+
             self.freeze_redraw_traces = False
             self.redraw_canvas()
 
@@ -363,7 +369,7 @@ class Window(Tk):
         # If I get rid of this call, the conditional below always evaluates to True. Should I be worried?
         repr(self.content_type_box.config('state')[4])
 
-        if self.data['content_type'].get() != 'Empty' and self.content_type_box['state'] != DISABLED:
+        if self.data['content_type'].get() not in ('Empty', '') and self.content_type_box['state'] != DISABLED:
             self.contents_box.configure(state=NORMAL)
             self.contents_box.check_variable()
         else:
@@ -607,6 +613,12 @@ class Window(Tk):
     # Input Validation Functions
     # ---------------------------------
 
+    def _bad_tile_field(self):
+        self.tiles[self.current_tile_index].increment_bad_field_count()
+
+    def _good_tile_field(self):
+        self.tiles[self.current_tile_index].decrement_bad_field_count()
+
     @staticmethod
     def _file_verify(filename):
         """Ensure that the user has selected a valid file."""
@@ -689,6 +701,9 @@ class Window(Tk):
 
         content_type = self.data['content_type'].get()
         value = int(value)
+
+        if content_type == 'Empty':
+            return True  # Don't care what's in the box if it's locked.
 
         return content_type == 'Coins' and 1 <= value <= 99 \
                or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
@@ -1272,6 +1287,9 @@ class Window(Tk):
         # ----------------------------------------
         # Post-Construction
         # ----------------------------------------
+
+        for v in self.tile_fields.values():
+            v.configure(good_value_callback=self._good_tile_field, bad_value_callback=self._bad_tile_field)
 
         # Add some padding to all children
         for child in self.mainframe.winfo_children():

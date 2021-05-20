@@ -71,14 +71,20 @@ class VerifiedWidget(ttk.Frame):
     def _verify_input(self, value):
         valid = self.verify_function(value)
 
+        # The value was previously good and will not be changed, or it was changed to a good value.
         good_input = (not valid and self.good_input) or (valid and self.good_function(value))
         if good_input and not self.good_input:
+            if self.good_value_callback is not None:
+                self.good_value_callback()
             self.warning_label.lower()
         elif not good_input and self.good_input:
+            if self.bad_value_callback is not None:
+                self.bad_value_callback()
             self.warning_label.lift()
         self.good_input = good_input
         if self.last_good_variable is not None and good_input:
-            self.last_good_variable.set(value)
+            if value != self.last_good_variable.get():
+                self.last_good_variable.set(value)
 
         if not valid:
             self.bell()
@@ -111,11 +117,18 @@ class VerifiedWidget(ttk.Frame):
             self.variable = variable
             self.check_variable()
             del kw['variable']
+        if 'bad_value_callback' in kw:
+            self.bad_value_callback = kw['bad_value_callback']
+            del kw['bad_value_callback']
+        if 'good_value_callback' in kw:
+            self.good_value_callback = kw['good_value_callback']
+            del kw['good_value_callback']
         super(VerifiedWidget, self).configure(cnf, **kw)
 
     def __init__(self, widget_type, widget_args, master, *, orientation='horizontal', label_text='',
                  label_width=None, verify_function=None, good_function=None, min_val=None, max_val=None, variable=None,
-                 warning_label='⚠', tooltip=None, last_good_variable=None, **kw):
+                 warning_label='⚠', tooltip=None, last_good_variable=None, bad_value_callback=None,
+                 good_value_callback=None, **kw):
         """
         CONSTRUCTOR
         :param widget: A ttk widget.
@@ -137,6 +150,8 @@ class VerifiedWidget(ttk.Frame):
         :param last_good_variable: The variable that will store the last good value that was in the field. This
         variable can be used as a fallback if the widget has a bad value. Should only be used for fields that, when
         changed, have an effect that is immediately apparent to the user.
+        :param bad_value_callback: The function to call when the widget's value becomes bad.
+        :param good_value_callback: The function to call when the widget's value becomes good.
         :param kw: Additional arguments to pass to the Frame that will be constructed around the widget.
         """
         super().__init__(master, **kw)
@@ -196,6 +211,9 @@ class VerifiedWidget(ttk.Frame):
         else:
             self.variable = StringVar()
         self.last_good_variable = last_good_variable
+
+        self.bad_value_callback = bad_value_callback
+        self.good_value_callback = good_value_callback
 
 
 if __name__ == '__main__':
