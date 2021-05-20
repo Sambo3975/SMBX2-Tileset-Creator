@@ -35,9 +35,12 @@ Created by Sambo
 #   Select multiple tiles with the selector and edit all at once. Fields that differ between the tiles will be blanked.
 #   Writing to a blanked field will still apply the change to all tiles. Don't know if this is really worth the effort.
 
-# TODO: Crash Log (created on crash -- contains the exception type and message)
 # TODO: Show indicators for bad tile data on the tileset canvas
+import os
+import pathlib
+import traceback
 import webbrowser
+from datetime import datetime
 from functools import lru_cache
 from tkinter import Tk, Menu, PhotoImage, Canvas, ttk, filedialog, messagebox, TclError, StringVar, BooleanVar
 from tkinter import NORMAL, DISABLED, NW, N, W, E, S, FALSE
@@ -132,7 +135,18 @@ class Window(Tk):
         """
         messagebox.showwarning(title, message)
 
-    def crash_prompt(self, *args):
+    @staticmethod
+    def create_crash_log(exception, message, tb):
+        os.makedirs('logs', exist_ok=True)
+        filepath = pathlib.Path('logs/crash_latest.log')
+        if filepath.exists():
+            # Old crash logs have the date and time of the crash in the name
+            last_mod_time = datetime.fromtimestamp(filepath.stat().st_ctime).strftime("%Y_%d_%H_%M_%S")
+            os.rename('logs/crash_latest.log', f'logs/crash_{last_mod_time}.log')
+        with open('logs/crash_latest.log', 'w') as f:  # crash_latest will always contain the most recent crash
+            traceback.print_exception(exception, message, tb, file=f)
+
+    def crash_prompt(self, exception, message, tb):
         """
         Display a crash message before terminating execution. Offer the option to report the error on the GitHub page.
         :return:
@@ -140,10 +154,12 @@ class Window(Tk):
         if not self.crashed:
             self.crashed = True  # Don't want to show additional errors directly caused by the first one.
 
+            self.create_crash_log(exception, message, tb)
+
             res = messagebox.showerror('Fatal Error', "Unfortunately, SMBX2 Tileset Importer has crashed. Would you "
                                                       "like to report this error on the software's GitHub page? If so, "
                                                       "be sure to include the contents of crash_latest.log (located in "
-                                                      "this program's directory) in your report.",
+                                                      "the logs folder of this program's directory) in your report.",
                                        type=messagebox.YESNO)
             if res == 'yes':
                 webbrowser.open_new('https://github.com/Sambo3975/SMBX2-Tileset-Creator/issues/new?assignees=&labels'
