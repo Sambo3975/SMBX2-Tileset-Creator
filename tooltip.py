@@ -66,3 +66,72 @@ class CreateToolTip(object):
         self.tw= None
         if tw:
             tw.destroy()
+
+
+"""
+Top-Level menu with tooltips
+Created by StackOverflow user stovfl
+Available online at https://stackoverflow.com/questions/55316791/how-can-i-add-a-tooltip-to-menu-item
+
+It doesn't seem to work...
+"""
+
+
+class MenuTooltip(tk.Menu):
+    def __init__(self, parent):
+        """
+        :param parent: The parent of this Menu, either 'root' or 'Menubar'
+         .tooltip == List of tuple (yposition, text)
+         .tooltip_active == Index (0-based) of the active shown Tooltip
+         Bind events <Leave>, <Motion>
+        """
+        super().__init__(parent, tearoff=0)
+        self.tooltip = []
+        self.tooltip_active = None
+
+        self.bind('<Leave>', self.leave)
+        self.bind('<Motion>', self.on_motion)
+
+    def add_command(self, *cnf, **kwargs):
+        tooltip = kwargs.get('tooltip')
+        if tooltip:
+            del kwargs['tooltip']
+        super().add_command(*cnf, **kwargs)
+        self.add_tooltip(len(self.tooltip), tooltip)
+
+    def add_tooltip(self, index, tooltip):
+        """
+        :param index: Index (0-based) of the Menu Item
+        :param tooltip: Text to show as Tooltip
+        :return: None
+        """
+        self.tooltip.append((self.yposition(index) + 2, tooltip))
+
+    def on_motion(self, event):
+        """
+        Loop .tooltip to find matching Menu Item
+        """
+        for idx in range(len(self.tooltip) - 1, -1, -1):
+            if event.y >= self.tooltip[idx][0]:
+                self.show_tooltip(idx)
+                break
+
+    def leave(self, event):
+        """
+        On leave, destroy the Tooltip and reset .tooltip_active to None
+        """
+        if not self.tooltip_active is None:
+            print('leave()'.format())
+            # destroy(<tooltip_active>)
+            self.tooltip_active = None
+
+    def show_tooltip(self, idx):
+        """
+        Show the Tooltip if not already shown, destroy the active Tooltip
+        :param idx: Index of the Tooltip to show
+        :return: None
+        """
+        if self.tooltip_active != idx:
+            # destroy(<tooltip_active>)
+            self.tooltip_active = idx
+            print('{}'.format(self.tooltip[idx][1]))

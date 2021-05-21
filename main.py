@@ -41,16 +41,16 @@ import pathlib
 import traceback
 import webbrowser
 from datetime import datetime
-from functools import lru_cache
 from tkinter import Tk, Menu, PhotoImage, Canvas, ttk, filedialog, messagebox, TclError, StringVar, BooleanVar
 from tkinter import NORMAL, DISABLED, NW, N, W, E, S, FALSE
 from os import path
+from collections import deque
 import json
 
 import regex as regex
 
 from orderedset import OrderedSet
-from tooltip import CreateToolTip
+from tooltip import CreateToolTip, MenuTooltip
 from widgets import ColorSelector, VerifiedWidget
 from tile import Tile
 
@@ -312,20 +312,20 @@ class Window(Tk):
         """
         Assign IDs from <ids> to each Tile in <tiles> that does not have an ID assigned.
         :param tiles: The tiles to which IDs are to be assigned.
-        :type tiles: list
+        :type tiles: deque
         :param ids: The ID pool to use.
         :type ids: OrderedSet
         :return: True if there were enough IDs for all tiles, False otherwise.
         """
-        start_low = not self.data['start_high'].get()
+        start_high = self.data['start_high'].get()
 
-        next_id = ids.pop(start_low)
+        next_id = ids.pop(start_high)
         for v in tiles:
             # False if the Tile had an ID assigned manually by the user.
             if (assigned_id := v.assign_id(next_id)) == next_id:
                 if len(ids) == 0:
                     return False
-                next_id = ids.pop(start_low)
+                next_id = ids.pop(start_high)
             ids.discard(assigned_id)  # Has no effect if the assigned ID is not in the ID pool.
 
         return True
@@ -333,6 +333,7 @@ class Window(Tk):
     def file_export(self, *args):
         """Export the tileset."""
         # TODO: File Export (disallow export if there are Tiles with bad data)
+        self.save_current_tile()
         data = self.data
 
         # Verify tileset fields
@@ -356,23 +357,32 @@ class Window(Tk):
 
         if bad_tileset_field_count > 0 or bad_tile_count > 0:
             # There are some fields with bad values preventing the export
-            error_msg = "Cannot export this tileset due to the following error(s) (indicated by ⚠):"
+            error_msg = "Cannot export this tileset due to the following error(s) (indicated by ⚠):\n"
             if bad_tileset_field_count > 0:
                 error_msg += f"\n- {bad_tileset_field_count} invalid tileset settings."
             if bad_tile_count > 0:
                 error_msg += f"\n- {bad_tile_count} tiles with invalid settings."
-            error_msg += "\nPlease resolve these errors, then try again."
+            error_msg += "\n\nPlease resolve these errors, then try again."
             self.warning_prompt(export_error_title, error_msg)
             return
 
         # Sort by type
-        blocks = []
-        bgos = []
+        blocks = deque()
+        bgos = deque()
         for v in self.tiles:
             if v.data['tile_type'] == 'Block':
-                blocks.append(v)
+                if v.data['tile_id'] != '':
+                    # Tiles with user-assigned IDs should be processed before those without. This ensures that, if a
+                    # user-assigned ID is also in the IDs pool, it is consumed before it is automatically assigned to
+                    # another tile.
+                    blocks.appendleft(v)
+                else:
+                    blocks.append(v)
             else:
-                bgos.append(v)
+                if v.data['tile_id'] != '':
+                    bgos.appendleft(v)
+                else:
+                    bgos.append(v)
 
         # Assign IDs
         if not self._assign_ids(blocks, block_ids):  # Insufficient ID pool
@@ -390,6 +400,7 @@ class Window(Tk):
 
         # Generate PGE tileset file
         print('Cleared all pre-export checks!')
+        self.file_save()
 
     def file_close(self, *args):
         """Close the file that is currently open. If there is unsaved data, ask the user if they would like to save
@@ -410,6 +421,10 @@ class Window(Tk):
 
         self._clear_file_dirty()
         self._update_opened_filename('')
+
+    def file_clear_ids(self):
+        for v in self.tiles:
+            v.clear_assigned_id()
 
     # ---------------------------------
     # Tile Management
@@ -720,7 +735,7 @@ class Window(Tk):
         return value
 
     @staticmethod
-    @lru_cache(maxsize=5)  # Cache the 5 most recent return values
+    # @lru_cache(maxsize=5)  # Cache the 5 most recent return values
     def _parse_id_list(value, tile_type, check_valid_only=False):
         value = window._get_id_list_preset(value, tile_type)
         if value == '' or regex.match(r'^(\d+(?:-\d+)?;?)+$', value) is None:
@@ -831,8 +846,11 @@ class Window(Tk):
         :type state: str
         :return: None
         """
-        for i in range(1, 4):
-            self.menu_file.entryconfig(i, state=state)
+        for i in range(1, 6):
+            try:
+                self.menu_file.entryconfig(i, state=state)
+            except TclError:
+                pass
 
     # ---------------------------------
     # Built-in method overrides
@@ -944,16 +962,25 @@ class Window(Tk):
         # Top-level Menus
         # ------------------------------------------
 
-        self.menu_bar = Menu(self)
+        self.menu_bar = MenuTooltip(self)
         self['menu'] = self.menu_bar
 
         # File Menu
-        self.menu_file = Menu(self.menu_bar)
+        self.menu_file = MenuTooltip(self.menu_bar)
         self.menu_bar.add_cascade(menu=self.menu_file, label='File')
-        self.menu_file.add_command(label='Open...', command=self.file_open, accelerator='Ctrl+O')
-        self.menu_file.add_command(label='Save', command=self.file_save, accelerator='Ctrl+S', state=DISABLED)
-        self.menu_file.add_command(label='Export...', command=self.file_export, accelerator='Ctrl+E', state=DISABLED)
-        self.menu_file.add_command(label='Close', command=self.file_close, accelerator='Ctrl+W', state=DISABLED)
+        self.menu_file.add_command(label='Open...', command=self.file_open, accelerator='Ctrl+O',
+                                   tooltip='Open a tileset image.')
+        self.menu_file.add_command(label='Save', command=self.file_save, accelerator='Ctrl+S', state=DISABLED,
+                                   tooltip='Save the current tileset. Data will be saved in a file with the same name '
+                                           'as the tileset image, but with .tileset.json as the extension.')
+        self.menu_file.add_command(label='Export', command=self.file_export, accelerator='Ctrl+E', state=DISABLED,
+                                   tooltip='Export the current tileset as SMBX2 resources. The resources will be '
+                                           'exported to a subdirectory with the same name as the tileset image.')
+        self.menu_file.add_command(label='Close', command=self.file_close, accelerator='Ctrl+W', state=DISABLED,
+                                   tooltip='Close the current tileset.')
+        self.menu_file.add_separator()
+        self.menu_file.add_command(label='Clear Auto-Assigned IDs', command=self.file_clear_ids, state=DISABLED,
+                                   tooltip='TEST')
 
         # ------------------------------------------
         # Hotkeys
@@ -1048,6 +1075,7 @@ class Window(Tk):
                                    'such as line guides, redirectors, and doors.\n\n'
                                    'User Slots: Overwrites blocks in the user-defined BGO range (751-1000)')
         w.grid(column=1, row=next_row(), sticky=W)
+        tileset_inputs['bgo_ids'] = w
 
         self.start_high = self.data['start_high']
         start_high_box = ttk.Checkbutton(self.export_box, text='IDs High to Low', variable=self.start_high,

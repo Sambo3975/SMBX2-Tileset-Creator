@@ -282,7 +282,7 @@ class Tile:
     def load_to_ui(self, ui_data, ui_inputs):
         """Load the Tile's data to the UI"""
         data = self.data
-        for k in data:
+        for k in defaults:
             ui_data[k].set(data[k])
             if k in ui_inputs:
                 ui_inputs[k].check_variable()
@@ -324,8 +324,12 @@ class Tile:
         """
         data = self.data
         if 'assigned_id' not in data:
-            data['assigned_id'] = int(data['id']) if data['id'] != '' else generated_id
+            data['assigned_id'] = int(data['tile_id']) if data['tile_id'] != '' else generated_id
         return data['assigned_id']
+
+    def clear_assigned_id(self):
+        """Clear the tile's assigned ID field. Has no effect if this field is not set."""
+        self.data.pop('assigned_id', None)
 
     def export(self):
         """Export the tile to png, txt and ini files for use in SMBX2."""
@@ -357,6 +361,9 @@ class Tile:
                 del kwargs[k]  # Remove the key so it won't be passed on to the Canvas items and cause an error
             else:
                 data[k] = defaults[k]
+        if 'assigned_id' in kwargs:
+            data['assigned_id'] = kwargs['assigned_id']
+            del kwargs['assigned_id']
         self.data = data
 
         self.color = outline or 'black'
