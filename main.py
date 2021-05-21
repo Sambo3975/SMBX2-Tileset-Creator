@@ -35,7 +35,7 @@ Created by Sambo
 #   Select multiple tiles with the selector and edit all at once. Fields that differ between the tiles will be blanked.
 #   Writing to a blanked field will still apply the change to all tiles. Don't know if this is really worth the effort.
 
-# TODO: Show indicators for bad tile data on the tileset canvas
+# TODO: Clear Auto-Assigned IDs -- Add a control that clears the auto-assigned IDs from all tiles.
 import os
 import pathlib
 import traceback
@@ -49,6 +49,7 @@ import json
 
 import regex as regex
 
+from orderedset import OrderedSet
 from tooltip import CreateToolTip
 from widgets import ColorSelector, VerifiedWidget
 from tile import Tile
@@ -97,6 +98,8 @@ built_in_id_lists = {
         'User Slots': '751-1000',
     }
 }
+
+export_error_title = 'Unable to Export'
 
 # -----------------------------------
 # Layout aides
@@ -305,10 +308,88 @@ class Window(Tk):
 
         self._clear_file_dirty()
 
+    def _assign_ids(self, tiles, ids):
+        """
+        Assign IDs from <ids> to each Tile in <tiles> that does not have an ID assigned.
+        :param tiles: The tiles to which IDs are to be assigned.
+        :type tiles: list
+        :param ids: The ID pool to use.
+        :type ids: OrderedSet
+        :return: True if there were enough IDs for all tiles, False otherwise.
+        """
+        start_low = not self.data['start_high'].get()
+
+        next_id = ids.pop(start_low)
+        for v in tiles:
+            # False if the Tile had an ID assigned manually by the user.
+            if (assigned_id := v.assign_id(next_id)) == next_id:
+                if len(ids) == 0:
+                    return False
+                next_id = ids.pop(start_low)
+            ids.discard(assigned_id)  # Has no effect if the assigned ID is not in the ID pool.
+
+        return True
+
     def file_export(self, *args):
+        """Export the tileset."""
         # TODO: File Export (disallow export if there are Tiles with bad data)
-        # self.warning_prompt("Not Implemented", "Can't export yet. Sorry :/")
-        raise NotImplementedError("Can't export yet.")
+        data = self.data
+
+        # Verify tileset fields
+        block_ids = None
+        bgo_ids = None
+        bad_tileset_field_count = 0
+        for k in self.tileset_fields:
+            if k == 'block_ids':
+                (success, block_ids) = self._parse_id_list(data['block_ids'].get(), 'Block')
+                bad_tileset_field_count += 0 if success else 1
+            elif k == 'bgo_ids':
+                (success, bgo_ids) = self._parse_id_list(data['bgo_ids'].get(), 'BGO')
+                bad_tileset_field_count += 0 if success else 1
+            else:
+                bad_tileset_field_count += 0 if self.tileset_fields[k].good_input else 1
+
+        # Verify Tile fields
+        bad_tile_count = 0
+        for v in self.tiles:
+            bad_tile_count += 0 if v.bad_field_count == 0 else 1
+
+        if bad_tileset_field_count > 0 or bad_tile_count > 0:
+            # There are some fields with bad values preventing the export
+            error_msg = "Cannot export this tileset due to the following error(s) (indicated by ⚠):"
+            if bad_tileset_field_count > 0:
+                error_msg += f"\n- {bad_tileset_field_count} invalid tileset settings."
+            if bad_tile_count > 0:
+                error_msg += f"\n- {bad_tile_count} tiles with invalid settings."
+            error_msg += "\nPlease resolve these errors, then try again."
+            self.warning_prompt(export_error_title, error_msg)
+            return
+
+        # Sort by type
+        blocks = []
+        bgos = []
+        for v in self.tiles:
+            if v.data['tile_type'] == 'Block':
+                blocks.append(v)
+            else:
+                bgos.append(v)
+
+        # Assign IDs
+        if not self._assign_ids(blocks, block_ids):  # Insufficient ID pool
+            self.warning_prompt(export_error_title, 'Cannot export: Not enough IDs to assign to blocks. Please '
+                                                    'add more IDs to the Block IDs pool, then try again.')
+            return
+        if not self._assign_ids(bgos, bgo_ids):
+            self.warning_prompt(export_error_title, 'Cannot export: Not enough IDs to assign to BGOs. Please '
+                                                    'add more IDs to the BGO IDs pool, then try again.')
+            return
+
+        # Export Tiles
+        for v in self.tiles:
+            v.export()
+
+        # Generate PGE tileset file
+        print('Cleared all pre-export checks!')
 
     def file_close(self, *args):
         """Close the file that is currently open. If there is unsaved data, ask the user if they would like to save
@@ -415,6 +496,11 @@ class Window(Tk):
         tile_data = self.tiles[index]
         tile_data.select()
         tile_data.load_to_ui(self.data, self.tile_fields)
+        tile_data.bad_field_count = 0
+        tile_data.decrement_bad_field_count()
+        for v in self.tile_fields.values():
+            if not v.good_input:
+                tile_data.increment_bad_field_count()
 
         self.freeze_redraw_traces = False
 
@@ -614,10 +700,12 @@ class Window(Tk):
     # ---------------------------------
 
     def _bad_tile_field(self):
-        self.tiles[self.current_tile_index].increment_bad_field_count()
+        if not self.freeze_redraw_traces:
+            self.tiles[self.current_tile_index].increment_bad_field_count()
 
     def _good_tile_field(self):
-        self.tiles[self.current_tile_index].decrement_bad_field_count()
+        if not self.freeze_redraw_traces:
+            self.tiles[self.current_tile_index].decrement_bad_field_count()
 
     @staticmethod
     def _file_verify(filename):
@@ -637,7 +725,7 @@ class Window(Tk):
         value = window._get_id_list_preset(value, tile_type)
         if value == '' or regex.match(r'^(\d+(?:-\d+)?;?)+$', value) is None:
             return False, None
-        ids = []
+        ids = OrderedSet()
         last_id = 0
         for x in value.split(';'):
             x_split = x.split('-')
@@ -656,11 +744,11 @@ class Window(Tk):
                 last_id = hi
                 if not check_valid_only:
                     for v in range(lo, hi + 1):
-                        ids.append(v)
+                        ids.add(v)
             else:
                 last_id = lo
                 if not check_valid_only:
-                    ids.append(lo)
+                    ids.add(lo)
         return True, ids
 
     @staticmethod
@@ -706,7 +794,7 @@ class Window(Tk):
             return True  # Don't care what's in the box if it's locked.
 
         return content_type == 'Coins' and 1 <= value <= 99 \
-               or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
+            or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
 
     # ---------------------------------
     # Widget Access Management

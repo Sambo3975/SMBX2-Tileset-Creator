@@ -311,18 +311,24 @@ class Tile:
         else:
             self._collect_non_default_data(bgo_settings, data, save_data)
 
+        if 'assigned_id' in data:
+            save_data['assigned_id'] = data['assigned_id']
+
         return save_data
 
-    def get_export_ready_data(self):
+    def assign_id(self, generated_id):
         """
-        Convert the Tile's data into strings containing the data in an export-ready format
-        :return: A dict object with 3 keys: 'png', 'txt', and 'ini'. Each key contains a dict with two keys: 'filename'
-        and 'data'. 'filename' contains the name of the file to be created (not the full path), and 'data' contains the
-        data that will be put into the file. In the case of 'png', this is a PhotoImage object, while for 'txt' and
-        'ini', it is a str object.
+        Assigns an ID to the Tile.
+        :param generated_id: The ID that will be assigned to the tile if the user did not provide one.
+        :return: The ID assigned.
         """
-        # TODO Tile: Get Export-Ready Data
-        print('Exporting of tilesets is not yet implemented.')
+        data = self.data
+        if 'assigned_id' not in data:
+            data['assigned_id'] = int(data['id']) if data['id'] != '' else generated_id
+        return data['assigned_id']
+
+    def export(self):
+        """Export the tile to png, txt and ini files for use in SMBX2."""
 
     def __getitem__(self, item):
         return self.data[item]
