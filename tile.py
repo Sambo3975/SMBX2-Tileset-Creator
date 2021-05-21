@@ -112,10 +112,39 @@ block_settings = ['collision_type', 'content_type', 'smashable', 'playerfilter',
                   'slippery', 'lava', 'bumpable', 'customhurt', 'ediblebyvine']
 content_settings = ['content_id']
 # All settings (for load) -- currently unused
-all_settings = ['tile_type', 'tile_id', 'frames', 'framespeed', 'no_shadows', 'light_source', 'lightoffsetx',
-                'lightoffsety', 'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker', 'priority',
-                'collision_type', 'content_type', 'smashable', 'playerfilter', 'npcfilter', 'sizable', 'pswitchable',
-                'slippery', 'lava', 'bumpable', 'customhurt', 'ediblebyvine', 'content_id']
+# all_settings = ['tile_type', 'tile_id', 'frames', 'framespeed', 'no_shadows', 'light_source', 'lightoffsetx',
+#                 'lightoffsety', 'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker', 'priority',
+#                 'collision_type', 'content_type', 'smashable', 'playerfilter', 'npcfilter', 'sizable', 'pswitchable',
+#                 'slippery', 'lava', 'bumpable', 'customhurt', 'ediblebyvine', 'content_id']
+
+# -------------------------------
+# Tile Export Rules
+# -------------------------------
+
+
+def export_rule_default(key, value):
+    if type(value) == bool:
+        value = str(value).lower()
+    return f'{key} = {value}'
+
+
+export_rules_collision_type = {
+    # Need to cover all these fields to override any default behavior
+    "Solid": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 0',
+    "Semisolid": 'semisolid = true\npassthrough = false\nfloorslope = 0\nceilingslope = 0',
+    "Passthrough": 'semisolid = false\npassthrough = true\nfloorslope = 0\nceilingslope = 0',
+    "Slope ◢": 'semisolid = false\npassthrough = false\nfloorslope = -1\nceilingslope = 0',
+    "Slope ◣": 'semisolid = false\npassthrough = false\nfloorslope = 1\nceilingslope = 0',
+    "Slope ◥": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 1',
+    "Slope ◤": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = -1',
+}
+export_rules = {  # Fields without rules here will just use the default
+    'no_shadows': lambda value: export_rule_default('noshadows', value),
+    'collision_type': lambda value: export_rules_collision_type[value],
+    'content_id_npc': lambda value: f'default-npc-content = {int(value) + 1000}'
+}
+# These properties do not need to be written to the .txt file
+export_excluded = {'tile_type', 'tile_id', 'content_type', 'light_source'}
 
 
 class Tile:
@@ -331,8 +360,44 @@ class Tile:
         """Clear the tile's assigned ID field. Has no effect if this field is not set."""
         self.data.pop('assigned_id', None)
 
-    def export(self):
-        """Export the tile to png, txt and ini files for use in SMBX2."""
+    @staticmethod
+    def _export_txt_property(key, value):
+        if key in export_excluded:
+            return ''
+
+        if key in export_rules:
+            return export_rules[key](value) + '\n'
+        return export_rule_default(key, value) + '\n'
+
+    def export(self, image, path):
+        """
+        Export the tile to png and txt files for use in SMBX2.
+        :param image: The image containing the entire tileset
+        :type image: PIL.Image
+        :param path: The export path
+        """
+        data = self.data
+
+        tile_type = data['tile_type']
+        export_name = path + ('/block-' if tile_type == 'Block' else '/background-') \
+            + str(data['assigned_id'])
+
+        # Export the image
+        # Easier than I thought it would be
+        image.crop(self.canvas.coords(self.bounding_box)).save(export_name + '.png')
+
+        # Export the .txt file
+        with open(export_name + '.txt', 'w') as f:
+            for k in unconditional_settings:
+                f.write(self._export_txt_property(k, data[k]))
+            tile_type_settings = bgo_settings if tile_type == 'BGO' else block_settings
+            print(tile_type_settings)
+            for k in tile_type_settings:
+                f.write(self._export_txt_property(k, data[k]))
+            if (content_type := data['content_type']) == 'NPC':
+                f.write(self._export_txt_property('content_id_npc', data['content_id']))
+            elif content_type == 'Coins':
+                f.write(self._export_txt_property('content_id', data['content_id']))
 
     def __getitem__(self, item):
         return self.data[item]

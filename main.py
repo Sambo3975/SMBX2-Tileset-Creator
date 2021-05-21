@@ -47,7 +47,9 @@ from os import path
 from collections import deque
 import json
 
+import PIL.Image
 import regex as regex
+from PIL import Image
 
 from orderedset import OrderedSet
 from tooltip import CreateToolTip, MenuTooltip
@@ -395,8 +397,19 @@ class Window(Tk):
             return
 
         # Export Tiles
-        for v in self.tiles:
-            v.export()
+        image = self.tileset_image
+
+        # This little bit of sorcery replaces the last instance of '.png' with ''.
+        # Source:
+        # https://stackoverflow.com/questions/2556108/rreplace-how-to-replace-the-last-occurrence-of-an-expression-in
+        # -a-string
+        export_path = ''.join(self.loaded_file.rsplit('.png', 1))
+
+        os.makedirs(export_path, exist_ok=True)
+        with Image.open(self.loaded_file) as img:
+            img = img.resize((image.width(), image.height()), resample=PIL.Image.NEAREST)
+            for v in self.tiles:
+                v.export(img, export_path)
 
         # Generate PGE tileset file
         print('Cleared all pre-export checks!')
