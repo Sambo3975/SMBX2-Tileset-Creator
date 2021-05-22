@@ -13,8 +13,11 @@ SMBX doesn't run on anything but Windows (or Wine) anyway.
 
 Created by Sambo
 """
-# Ideas for second release
+# Ideas for future releases
 # -----------------------------------
+# Option: Tileset name
+# Option: Tile name
+# Option: Tile description
 # Option: Tile Padding
 #   Adds gaps between grid squares (tileset creators commonly place a 1 or 2 px gap between tiles)
 # Placement Modes:
@@ -35,7 +38,6 @@ Created by Sambo
 #   Select multiple tiles with the selector and edit all at once. Fields that differ between the tiles will be blanked.
 #   Writing to a blanked field will still apply the change to all tiles. Don't know if this is really worth the effort.
 
-# TODO: Clear Auto-Assigned IDs -- Add a control that clears the auto-assigned IDs from all tiles.
 import os
 import pathlib
 import traceback
@@ -332,6 +334,39 @@ class Window(Tk):
 
         return True
 
+    def _create_tileset_file(self, tiles, tile_type, export_path):
+        """Create a tileset file for PGE"""
+        if len(tiles) == 0:
+            return  # Don't create an empty tileset file.
+
+        grid_size = int(self.data['last_good_grid_size'].get()) * int(self.data['last_good_pixel_scale'].get())
+        tile_type_int = 1 if tile_type == 'BGO' else 0
+        tiles = sorted(tiles)
+
+        tileset_layout = {}
+        max_col = 0
+        for t in tiles:
+            row = int(t.canvas.coords(t.bounding_box)[1] // grid_size)
+            if row not in tileset_layout:
+                tileset_layout[row] = []
+            tileset_layout[row].append(t)
+            max_col = max(max_col, len(tileset_layout[row]))
+
+        row_lookahead = 0
+        with open(f'{export_path}/{tile_type}s.tileset.ini', 'w') as f:
+            f.write(f'[tileset]\n'
+                    f'rows={len(tileset_layout)}\n'
+                    f'cols={max_col}\n'
+                    f'name=Imported {tile_type} Tileset\n'  # Make this configurable?
+                    f'type={tile_type_int}\n')
+            for row in range(len(tileset_layout)):
+                while row + row_lookahead not in tileset_layout:
+                    row_lookahead += 1
+                for col in range(len(tileset_layout[row + row_lookahead])):
+                    f.write(f'\n'
+                            f'[item-{col}-{row}]\n'
+                            f'id={tileset_layout[row + row_lookahead][col].data["assigned_id"]}\n')
+
     def file_export(self, *args):
         """Export the tileset."""
         # TODO: File Export (disallow export if there are Tiles with bad data)
@@ -396,8 +431,10 @@ class Window(Tk):
                                                     'add more IDs to the BGO IDs pool, then try again.')
             return
 
+        # Save the changes this process made to the file
+        self.file_save()
+
         # Export Tiles
-        image = self.tileset_image
 
         # This little bit of sorcery replaces the last instance of '.png' with ''.
         # Source:
@@ -406,14 +443,19 @@ class Window(Tk):
         export_path = ''.join(self.loaded_file.rsplit('.png', 1))
 
         os.makedirs(export_path, exist_ok=True)
+        image = self.tileset_image
         with Image.open(self.loaded_file) as img:
             img = img.resize((image.width(), image.height()), resample=PIL.Image.NEAREST)
             for v in self.tiles:
                 v.export(img, export_path)
 
         # Generate PGE tileset file
-        print('Cleared all pre-export checks!')
-        self.file_save()
+
+        if data['create_pge_tileset'].get():
+            self._create_tileset_file(blocks, 'Block', export_path)
+            self._create_tileset_file(bgos, 'BGO', export_path)
+
+        messagebox.showinfo('Done!', f'Successfully exported {len(blocks)} blocks and {len(bgos)} BGOs.')
 
     def file_close(self, *args):
         """Close the file that is currently open. If there is unsaved data, ask the user if they would like to save

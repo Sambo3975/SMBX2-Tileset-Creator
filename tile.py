@@ -141,7 +141,8 @@ export_rules_collision_type = {
 export_rules = {  # Fields without rules here will just use the default
     'no_shadows': lambda value: export_rule_default('noshadows', value),
     'collision_type': lambda value: export_rules_collision_type[value],
-    'content_id_npc': lambda value: f'default-npc-content = {int(value) + 1000}'
+    'content_id_npc': lambda value: f'default-npc-content = {int(value) + 1000}',
+    'slippery': lambda value: f'default-slippery={1 if value else 0}',
 }
 # These properties do not need to be written to the .txt file
 export_excluded = {'tile_type', 'tile_id', 'content_type', 'light_source'}
@@ -391,7 +392,9 @@ class Tile:
             for k in unconditional_settings:
                 f.write(self._export_txt_property(k, data[k]))
             tile_type_settings = bgo_settings if tile_type == 'BGO' else block_settings
-            print(tile_type_settings)
+            if data['light_source']:
+                for k in light_settings:
+                    f.write(self._export_txt_property(k, data[k]))
             for k in tile_type_settings:
                 f.write(self._export_txt_property(k, data[k]))
             if (content_type := data['content_type']) == 'NPC':
@@ -404,6 +407,10 @@ class Tile:
 
     def __setitem__(self, key, value):
         self.data[key] = value
+
+    def __lt__(self, other):
+        """Used during .tileset.ini file creation. Compares Tiles based on their x-position in the canvas."""
+        return self.canvas.coords(self.bounding_box)[0] < other.canvas.coords(other.bounding_box)[0]
 
     def __init__(self, canvas, x1, y1, x2, y2, *, outline=None, width=None, scale=1, **kwargs):
         """
