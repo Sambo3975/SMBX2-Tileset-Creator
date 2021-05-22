@@ -15,7 +15,7 @@ SMBX doesn't run on anything but Windows (or Wine) anyway.
 ### Official Release
 
 The current release of this software is available as a Windows executable 
-[here](https://github.com/Sambo3975/SMBX2-Tileset-Importer-Release). That page also includes documentation of the 
+[here](https://github.com/Sambo3975/SMBX2-Tileset-Creator/releases). That page also includes documentation of the 
 software's features.
 
 ### Build it Yourself
