@@ -2,11 +2,21 @@
 Tile Class
 Contains all the data needed to create a Block or BGO in SMBX2
 """
+import os
+import sys
+
+from tkinter import PhotoImage, NW, NORMAL, HIDDEN
+
+
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 
 # -------------------------------
 # Tile Type Drawing Functions
 # -------------------------------
-from tkinter import PhotoImage, NW, NORMAL, HIDDEN
 
 TILE_INSET = 6
 T = TILE_INSET
@@ -424,7 +434,7 @@ class Tile:
         :param kwargs: Settings to apply to the bounding box. Accepts any named arguments that can be passed to
         tkinter.Canvas.itemconfigure
         """
-        self.error_image = PhotoImage(file='data/tile_error.png')
+        self.error_image = PhotoImage(file=resource_path('data/tile_error.png'))
 
         data = {}
         for k in defaults.keys():

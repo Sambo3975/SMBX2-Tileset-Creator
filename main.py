@@ -40,6 +40,7 @@ Created by Sambo
 
 import os
 import pathlib
+import sys
 import traceback
 import webbrowser
 from datetime import datetime
@@ -128,6 +129,12 @@ def next_row(x=None):
 # ----------------------------
 # Main Window
 # ----------------------------
+
+
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 
 
 class Window(Tk):
@@ -984,7 +991,7 @@ class Window(Tk):
 
         # Window settings
         self.title("SMBX2 Tileset Importer")
-        self.iconbitmap('data/icon.ico')
+        self.iconbitmap(resource_path('data/icon.ico'))
         self.resizable(False, False)  # Prevent resizing of the window
         self.crashed = False
 
