@@ -12,7 +12,7 @@ This program streamlines the creation of tilesets in SMBX2 by automating the mos
 
 This program was designed for Windows and may not work right on other platforms. I figured this would be fine since
 SMBX doesn't run on anything but Windows (or Wine) anyway. If you want to try to use it on another platform or test 
-unreleased features, feel free to [build it yourself](https://github.com/Sambo3975/SMBX2-Tileset-Creator/).
+unreleased features, feel free to build it yourself.
 
 ## Installation
 
@@ -120,6 +120,10 @@ the tileset in PGE after you export.
 ## Features Planned for Future Releases
 
 The following features are planned for future releases. You can request a new feature [here](https://github.com/Sambo3975/SMBX2-Tileset-Creator/issues/new?assignees=&labels=&template=feature_request.md&title=). Approved feature requests will be added to this section.
+
+### General Features
+
+* A scrollbar for large tileset images.
 
 ### Tileset Configurations
 
