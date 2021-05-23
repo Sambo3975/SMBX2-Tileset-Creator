@@ -16,7 +16,7 @@ class ColorSelector(ttk.Frame):
     
     def __change_color(self, *args):
         color_code = colorchooser.askcolor(title='Select Color')
-        if color_code is not None:  # user selected a color and did not hit Cancel
+        if color_code[1] is not None:  # user selected a color and did not hit Cancel
             self.__color_preview.configure(background=color_code[1])
             self.value.set(color_code[1])
 
@@ -82,7 +82,7 @@ class VerifiedWidget(ttk.Frame):
                 self.bad_value_callback()
             self.warning_label.lift()
         self.good_input = good_input
-        if self.last_good_variable is not None and good_input:
+        if self.last_good_variable is not None and valid and good_input:
             if value != self.last_good_variable.get():
                 self.last_good_variable.set(value)
 

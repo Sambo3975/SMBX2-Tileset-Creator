@@ -18,8 +18,9 @@ Created by Sambo
 # Option: Tileset name
 # Option: Tile name
 # Option: Tile description
-# Option: Tile Padding
-#   Adds gaps between grid squares (tileset creators commonly place a 1 or 2 px gap between tiles)
+# Grid Options:
+#   Tile Padding: Adds gaps between grid squares (tileset creators commonly place a 1 or 2 px gap between tiles)
+#   Offsets: Allow the grid to be horizontally and/or horizontally offset
 # Placement Modes:
 #   Single Tile: Places a single solid tile covering the selected area
 #   Multi 1x1: Fills the selected area with 1x1 tiles; bonus points for handling tiles overlapping the selection
@@ -37,6 +38,9 @@ Created by Sambo
 # Multi Edit:
 #   Select multiple tiles with the selector and edit all at once. Fields that differ between the tiles will be blanked.
 #   Writing to a blanked field will still apply the change to all tiles. Don't know if this is really worth the effort.
+
+# TODO: Release -- Option: Grid Offset
+# TODO: Release -- Scrollbar for large tilesets
 
 import os
 import pathlib
@@ -1419,14 +1423,14 @@ class Window(Tk):
         self.lava_box = ttk.Checkbutton(self.tile_behavior_frame, text='Lava', variable=self.lava, offvalue=False,
                                         onvalue=True)
         self.lava_box.grid(column=1, row=next_row(), sticky=W)
-        CreateToolTip(self.lava_box, 'If true, the block acts as lava.')
+        CreateToolTip(self.lava_box, 'If true, the block is lava, and it will kill players and most NPCs on contact.')
 
         # P-switch-able
         self.pswitchable = self.data['pswitchable']
         self.pswitchable_box = ttk.Checkbutton(self.tile_behavior_frame, text='P-Switch-able',
                                                variable=self.pswitchable, offvalue=False, onvalue=True)
         self.pswitchable_box.grid(column=1, row=next_row(), sticky=W)
-        CreateToolTip(self.lava_box, 'If true, the block turns into a coin when a P-Switch is hit.')
+        CreateToolTip(self.pswitchable_box, 'If true, the block turns into a coin when a P-Switch is hit.')
 
         # Edible By Vine
         self.ediblebyvine = self.data['ediblebyvine']
