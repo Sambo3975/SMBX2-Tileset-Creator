@@ -1,11 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import pathlib
+import sys
 
 block_cipher = None
 
+path = pathlib.Path().absolute();
 
 a = Analysis(['main.py'],
-             pathex=['C:\\Users\\sambo\\PycharmProjects\\TilesetCreator'],
+             pathex=[path],
              binaries=[],
              hiddenimports=[],
              hookspath=[],
@@ -15,7 +18,11 @@ a = Analysis(['main.py'],
              win_private_assemblies=False,
              cipher=block_cipher,
              noarchive=False)
-a.datas += [('data/icon.ico', 'data/icon.ico', 'DATA')]
+
+if sys.platform == "win32":
+    a.datas += [('data/icon.ico', 'data/icon.ico', 'DATA')]
+else:
+    a.datas += [('data/icon_32.png', 'data/icon_32.png', 'DATA')]
 a.datas += [('data/tile_error.png', 'data/tile_error.png', 'DATA')]
 
 pyz = PYZ(a.pure, a.zipped_data,
@@ -34,4 +41,4 @@ exe = EXE(pyz,
           upx=True,
           upx_exclude=[],
           runtime_tmpdir=None,
-          console=False )
+          console=False)
