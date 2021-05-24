@@ -5,7 +5,7 @@ _Note: This software is currently in Beta. If you experience any errors or bugs,
 
 ## About
 
-This program streamlines the creation of tilesets for SMBX2 (and also limited support for TheXTech) by automating the most tedious parts of the process:
+This program streamlines the creation of tilesets for SMBX2 and TheXTech by automating the most tedious parts of the process:
 - Cutting the image with all your tiles into individual block-*.png images.
 - Finding IDs for all the images.
 - Creating the `.tileset.ini` file for the Moondust Editor (former PGE Editor).
