@@ -11,15 +11,13 @@ This program streamlines the creation of tilesets for SMBX2 and TheXTech by auto
 - Creating the `.tileset.ini` file for the Moondust Editor (former PGE Editor).
 
 This program was originally designed for Windows, however it also can work on Linux if you will install all necessary
-python3 packages. I figured this would be fine since SMBX2 doesn't run on anything but Windows (or Wine) anyway.
-If you want to try to use it on another platform or test unreleased features, feel free to build it yourself.
+python3 packages. If you want to try to use it on another platform or test unreleased features, feel free to build it yourself.
 
 This program also has limited support for [TheXTech project](https://github.com/Wohlstand/TheXTech/wiki), the enhanced
-cross-platform port of the SMBX 1.3. It has the support for PNG sprites and has the full native support by the standalone
-Moondust Editor (out of SMBX2) include the direct level testing, however, it doesn't support any config files to
-customize settings for blocks and BGOs yet and keeps using the same itemset as SMBX 1.3 had even reserved blocks
+cross-platform port of the SMBX 1.3. It has support for PNG sprites and has the full native support by the standalone
+Moondust Editor, including direct level testing. However, it doesn't support any config files to
+customize settings for blocks and BGOs yet and keeps using the same itemset as SMBX 1.3 had with reserved blocks
 and BGO entries.
-
 
 ## Installation
 
@@ -27,12 +25,10 @@ and BGO entries.
 Get the current release [here](https://github.com/Sambo3975/SMBX2-Tileset-Creator/releases).
 
 ### On Linux
-This program can work on Linux-based operating system. If the public release build won't work for any reason, you
-are able to run the project directly. The Python 3.8 and higher is recommended, it may work on older
-version but no guarantee it will work.
+This program can work on Linux-based operating systems. It requires Python 3.8+.
 
 If you have the Debian-based distribution, you need to install the next dependencies from the package manager until you
-will get the program work:
+can get the program to work:
 ```bash
 sudo apt install tix-dev python3-tk python3-regex python3-pil
 ```
