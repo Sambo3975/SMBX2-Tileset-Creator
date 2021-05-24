@@ -39,8 +39,8 @@ Created by Sambo
 #   Select multiple tiles with the selector and edit all at once. Fields that differ between the tiles will be blanked.
 #   Writing to a blanked field will still apply the change to all tiles. Don't know if this is really worth the effort.
 
-# TODO: Release -- Option: Grid Offset
-# TODO: Release -- Scrollbar for large tilesets
+# TODO: Option: Grid Offset
+# TODO: Scrollbar for large tilesets
 
 import os
 import pathlib
@@ -380,7 +380,6 @@ class Window(Tk):
 
     def file_export(self, *args):
         """Export the tileset."""
-        # TODO: File Export (disallow export if there are Tiles with bad data)
         self.save_current_tile()
         data = self.data
 
