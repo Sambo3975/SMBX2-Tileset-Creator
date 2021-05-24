@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """
 SMBX2 Tileset Creator
 ---------------------------------
@@ -50,6 +51,8 @@ import webbrowser
 from datetime import datetime
 from tkinter import Tk, Menu, PhotoImage, Canvas, ttk, filedialog, messagebox, TclError, StringVar, BooleanVar
 from tkinter import NORMAL, DISABLED, NW, N, W, E, S, FALSE
+if sys.platform != "win32":
+    from tkinter import tix
 from os import path
 from collections import deque
 import json
@@ -994,7 +997,10 @@ class Window(Tk):
 
         # Window settings
         self.title("SMBX2 Tileset Importer")
-        self.iconbitmap(resource_path('data/icon.ico'))
+        if sys.platform == "win32":
+            self.iconbitmap(resource_path('data/icon.ico'))
+        else:
+            self.iconphoto(True, tix.PhotoImage(file=resource_path('data/icon_32.png')))
         self.resizable(False, False)  # Prevent resizing of the window
         self.crashed = False
 
