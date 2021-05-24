@@ -1,5 +1,5 @@
-/logs/*
-.idea/*
+.idea/
 __pycache__
-build/
-dist/
+/logs/
+/build/
+/dist/
