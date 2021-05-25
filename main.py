@@ -41,6 +41,9 @@ Created by Sambo
 # TODO: Option: Tile Name
 # TODO: Option: Tile Description
 # TODO: Option: Grid Padding
+# Affected areas: UI, canvas draw, tile data, tile export
+# needs to be added to each tile upon creation (if not default)
+# needs to be used during export for a "zealous crop" that removes the gaps
 # TODO: Scrollbar for large tilesets
 
 import os
@@ -307,6 +310,8 @@ class Window(Tk):
 
         # Force the grid size and pixel scale to their last valid values
         data['grid_size'].set(data['last_good_grid_size'].get())
+        data['grid_offset_x'].set(data['last_good_grid_offset_x'].get())
+        data['grid_offset_y'].set(data['last_good_grid_offset_y'].get())
         data['pixel_scale'].set(data['last_good_pixel_scale'].get())
         self.pixel_scale_box.check_variable()
         self.grid_size_box.check_variable()
