@@ -36,11 +36,11 @@ Created by Sambo
 #   111            000    000               111    101                 111           000
 #
 #   If the pattern does not match, count the flags. If 1 to 3 are set, assume passthrough. Otherwise, assume solid.
-# Multi Edit:
-#   Select multiple tiles with the selector and edit all at once. Fields that differ between the tiles will be blanked.
-#   Writing to a blanked field will still apply the change to all tiles. Don't know if this is really worth the effort.
 
-# TODO: Option: Grid Offset
+# TODO: Option: Tileset Name
+# TODO: Option: Tile Name
+# TODO: Option: Tile Description
+# TODO: Option: Grid Padding
 # TODO: Scrollbar for large tilesets
 
 import os
@@ -51,6 +51,7 @@ import webbrowser
 from datetime import datetime
 from tkinter import Tk, Menu, PhotoImage, Canvas, ttk, filedialog, messagebox, TclError, StringVar, BooleanVar
 from tkinter import NORMAL, DISABLED, NW, N, W, E, S, FALSE
+
 if sys.platform != "win32":
     from tkinter import tix
 from os import path
@@ -77,6 +78,8 @@ data_defaults = {
     # View
 
     'grid_size': '16',
+    'grid_offset_x': '0',
+    'grid_offset_y': '0',
     'show_grid': True,
     'highlight_color': '#ff0080',
 
@@ -89,9 +92,8 @@ data_defaults = {
     'start_high': False,
 }
 
-tileset_fields = ['grid_size', 'show_grid', 'highlight_color', 'pixel_scale', 'block_ids',
-                  'bgo_ids',
-                  'create_pge_tileset', 'start_high']
+tileset_fields = ['grid_size', 'grid_offset_x', 'grid_offset_y', 'show_grid', 'highlight_color', 'pixel_scale',
+                  'block_ids', 'bgo_ids', 'create_pge_tileset', 'start_high']
 tile_fields = ['tile_type', 'tile_id', 'frames', 'framespeed', 'light_source', 'lightoffsetx', 'lightoffsety',
                'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker', 'priority', 'content_type', 'content_id',
                'playerfilter', 'npcfilter', 'collision_type', 'sizable', 'pswitchable', 'slippery', 'lava', 'bumpable',
@@ -244,6 +246,8 @@ class Window(Tk):
             self.current_tile_index = -1
             self.tileset_canvas.delete('all')
             self.tileset_image_zoom = 1
+            self.grid_offset_x = None
+            self.grid_offset_y = None
             window.tiles = []
 
             data = self.data
@@ -642,11 +646,14 @@ class Window(Tk):
 
     def _get_grid_aligned_extents(self, start_x, start_y, end_x, end_y):
         """Get the grid-aligned extents of the area the user is selecting"""
-        gs = self.tileset_grid_size * self.tileset_image_zoom
-        x1 = min(start_x, end_x) // gs * gs
-        y1 = min(start_y, end_y) // gs * gs
-        x2 = (max(start_x, end_x) + gs) // gs * gs
-        y2 = (max(start_y, end_y) + gs) // gs * gs
+        zoom = self.tileset_image_zoom
+        gs = self.tileset_grid_size * zoom
+        ox = self.grid_offset_x * zoom
+        oy = self.grid_offset_y * zoom
+        x1 = (min(start_x, end_x) - ox) // gs * gs + ox
+        y1 = (min(start_y, end_y) - oy) // gs * gs + oy
+        x2 = (max(start_x, end_x) + gs - ox) // gs * gs + ox
+        y2 = (max(start_y, end_y) + gs - oy) // gs * gs + oy
         return x1, y1, x2, y2
 
     def click(self, event):
@@ -726,9 +733,14 @@ class Window(Tk):
         """Redraw the grid if Show Grid is enabled."""
         show_grid = self.data['show_grid'].get()
         grid_size = int(self.data['last_good_grid_size'].get())
+        grid_offset_x = int(self.data['last_good_grid_offset_x'].get())
+        grid_offset_y = int(self.data['last_good_grid_offset_y'].get())
         pixel_scale = int(self.data['last_good_pixel_scale'].get())
 
-        if self.show_grid and not show_grid or grid_size != self.tileset_grid_size \
+        if self.show_grid and not show_grid \
+                or grid_size != self.tileset_grid_size \
+                or grid_offset_x != self.grid_offset_x \
+                or grid_offset_y != self.grid_offset_y \
                 or pixel_scale != self.tileset_image_zoom:
             # Clear away the grid lines if Show Grid is disabled or the grid size has changed.
             canvas.delete('grid_line')
@@ -736,6 +748,10 @@ class Window(Tk):
         if show_grid:
             image = self.tileset_image
             grid_square_size = pixel_scale * grid_size
+            grid_offset_x %= grid_size
+            grid_offset_y %= grid_size
+            grid_offset_x *= pixel_scale
+            grid_offset_y *= pixel_scale
             w = image.width()
             h = image.height()
             vertical_line_count = w // grid_square_size + 1
@@ -743,11 +759,13 @@ class Window(Tk):
             dash = (4, 4)
             for i in range(vertical_line_count + 1):
                 # Create a black and white dashed line
-                canvas.create_line(i * grid_square_size, 0, i * grid_square_size, h, fill='white', tags='grid_line')
-                canvas.create_line(i * grid_square_size, 0, i * grid_square_size, h, dash=dash, tags='grid_line')
+                x = i * grid_square_size + grid_offset_x
+                canvas.create_line(x, 0, x, h, fill='white', tags='grid_line')
+                canvas.create_line(x, 0, x, h, dash=dash, tags='grid_line')
             for i in range(horizontal_line_count + 1):
-                canvas.create_line(0, i * grid_square_size, w, i * grid_square_size, fill='white', tags='grid_line')
-                canvas.create_line(0, i * grid_square_size, w, i * grid_square_size, dash=dash, tags='grid_line')
+                y = i * grid_square_size + grid_offset_y
+                canvas.create_line(0, y, w, y, fill='white', tags='grid_line')
+                canvas.create_line(0, y, w, y, dash=dash, tags='grid_line')
 
     def _redraw_tileset_image(self, canvas):
         """Redraw the tileset image if the pixel scale has been changed."""
@@ -776,6 +794,8 @@ class Window(Tk):
 
             self.show_grid = self.data['show_grid'].get()
             self.tileset_grid_size = int(self.data['last_good_grid_size'].get())
+            self.grid_offset_x = int(self.data['last_good_grid_offset_x'].get())
+            self.grid_offset_y = int(self.data['last_good_grid_offset_y'].get())
             self.tileset_image_zoom = int(self.data['last_good_pixel_scale'].get())
 
     # ---------------------------------
@@ -877,7 +897,7 @@ class Window(Tk):
             return True  # Don't care what's in the box if it's locked.
 
         return content_type == 'Coins' and 1 <= value <= 99 \
-            or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
+               or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
 
     # ---------------------------------
     # Widget Access Management
@@ -934,9 +954,13 @@ class Window(Tk):
 
             'highlight_color': StringVar(),
             'grid_size': StringVar(),
+            'grid_offset_x': StringVar(),
+            'grid_offset_y': StringVar(),
             'show_grid': BooleanVar(),
 
             'last_good_grid_size': StringVar(self, data_defaults['grid_size']),
+            'last_good_grid_offset_x': StringVar(self, data_defaults['grid_offset_x']),
+            'last_good_grid_offset_y': StringVar(self, data_defaults['grid_offset_y']),
 
             # Export
 
@@ -1008,9 +1032,13 @@ class Window(Tk):
         # These keep track of what is currently displayed so we know when the display needs to be redrawn
         self.tileset_image_zoom = None
         self.tileset_grid_size = 0
+        self.grid_offset_x = None
+        self.grid_offset_y = None
         self.show_grid = True
         # These variable traces trigger a re-draw of the tileset canvas when their targets change
         self.data['last_good_grid_size'].trace_add('write', self.redraw_canvas)
+        self.data['last_good_grid_offset_x'].trace_add('write', self.redraw_canvas)
+        self.data['last_good_grid_offset_y'].trace_add('write', self.redraw_canvas)
         self.data['last_good_pixel_scale'].trace_add('write', self.redraw_canvas)
         self.data['show_grid'].trace_add('write', self.redraw_canvas)
         # These traces trigger a redraw of the current tile
@@ -1095,6 +1123,20 @@ class Window(Tk):
         grid_size_box.grid(column=1, row=next_row(), sticky=W)
         self.grid_size_box = grid_size_box
         tileset_inputs['grid_size'] = grid_size_box
+
+        # Grid Offset X
+        w = VerifiedWidget(ttk.Spinbox, {'width': 6}, self.view_box, variable=self.data['grid_offset_x'],
+                           last_good_variable=self.data['last_good_grid_offset_x'], min_val=-128, max_val=128,
+                           orientation='vertical', label_text='Grid Offset X:', tooltip='The X-offset of the grid.')
+        w.grid(column=1, row=next_row(), sticky=W)
+        tileset_inputs['grid_offset_x'] = w
+
+        # Grid Offset Y
+        w = VerifiedWidget(ttk.Spinbox, {'width': 6}, self.view_box, variable=self.data['grid_offset_y'],
+                           last_good_variable=self.data['last_good_grid_offset_y'], min_val=-128, max_val=128,
+                           orientation='vertical', label_text='Grid Offset Y:', tooltip='The Y-offset of the grid.')
+        w.grid(column=1, row=next_row(), sticky=W)
+        tileset_inputs['grid_offset_y'] = w
 
         # Show Grid
         ttk.Checkbutton(self.view_box, text='Show Grid', variable=self.data['show_grid'], offvalue=False, onvalue=True) \
