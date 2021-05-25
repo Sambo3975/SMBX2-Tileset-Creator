@@ -19,10 +19,14 @@ a = Analysis(['main.py'],
              cipher=block_cipher,
              noarchive=False)
 
+if sys.platform == "darwin":
+    a.datas += [('data/icon.icns', 'data/icon.icns', 'DATA')]
+
 if sys.platform == "win32":
     a.datas += [('data/icon.ico', 'data/icon.ico', 'DATA')]
 else:
     a.datas += [('data/icon_32.png', 'data/icon_32.png', 'DATA')]
+
 a.datas += [('data/tile_error.png', 'data/tile_error.png', 'DATA')]
 
 pyz = PYZ(a.pure, a.zipped_data,
@@ -42,3 +46,15 @@ exe = EXE(pyz,
           upx_exclude=[],
           runtime_tmpdir=None,
           console=False)
+
+if sys.platform == "darwin":
+    app = BUNDLE(exe,
+            name='SMBX2 Tileset Importer.app',
+            icon='data/icon.icns',
+            bundle_identifier='SMBX2 Tileset Importer',
+            version='0.1.2',
+            info_plist={
+                'NSPrincipalClass': 'NSApplication',
+                'NSAppleScriptEnabled': False,
+            }
+        )
