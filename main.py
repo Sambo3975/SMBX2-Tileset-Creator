@@ -40,16 +40,18 @@ Created by Sambo
 # Changes in the next release
 # ----------------------------------
 # Features:
+#   * The program can now be built on Linux and MacOS (thanks to some contributions from Wohlstand).
 #   * The grid can now be offset horizontally and/or vertically.
 #   * The grid can now have padding added between cells.
 # Bugfixes:
 #   * Grid Size now shows the correct value on file load.
+#   * Removed block-26 from the default ID list as it is used by playerblocktop NPCs. Nice one, Redigit.
 
-# TODO: Remove block-26 from the default ID list as it is apparently used for playerblocktop NPCs. Nice one, Redigit.
+# TODO: Set image for tiles in the 751-1000 range as they default to custom.png
+# TODO: Option: Differing Grid Width/Height (done by entering wxh, i.e. 32x16)
 # TODO: Option: Tileset Name
 # TODO: Option: Tile Name
 # TODO: Option: Tile Description
-# TODO: Option: Differing Grid Width/Height (done by entering wxh, i.e. 32x16)
 # TODO: Bug: Scrolling a Combobox doesn't trigger redraw.
 
 # TODO: Scrollbar for large tilesets
@@ -113,9 +115,9 @@ tile_fields = ['tile_type', 'tile_id', 'frames', 'framespeed', 'light_source', '
 
 built_in_id_lists = {
     'Block': {
-        'Avoid Special': '1;3;6-29;38-54;56-59;61-87;91-108;113-114;116-168;182-191;194-223;227-266;270-279;284-370'
-                         ';372-403;407-419;421-427;432-456;488-525;527-597;599-619;630;635-638;1001-1005;1008-1072'
-                         ';1076-1101;1106-1132;1138-1141;1156-1267;1269-1270',
+        'Avoid Special': '1;3;6-25;27-29;38-54;56-59;61-87;91-108;113-114;116-168;182-191;194-223;227-266;270-279;'
+                         '284-370;372-403;407-419;421-427;432-456;488-525;527-597;599-619;630;635-638;1001-1005;'
+                         '1008-1072;1076-1101;1106-1132;1138-1141;1156-1267;1269-1270',
         'User Slots': '751-1000',
     },
     'BGO': {

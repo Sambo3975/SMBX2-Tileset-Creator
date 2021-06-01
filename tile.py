@@ -413,7 +413,6 @@ class Tile:
             pad_x = 0
             while x + pad_x < w:
                 chunk = image.crop((x + pad_x, y + pad_y, x + grid_size + pad_x, y + grid_size + pad_y))
-                # chunk.save(f'chunk-{x}-{y}.png')
                 new_img.paste(chunk, (x, y, x + grid_size, y + grid_size))
                 x += grid_size
                 pad_x += grid_padding
@@ -433,7 +432,7 @@ class Tile:
 
         tile_type = data['tile_type']
         export_name = path + ('/block-' if tile_type == 'Block' else '/background-') \
-            + str(data['assigned_id'])
+            + str(tile_id := data['assigned_id'])
 
         # Export the image
         # Easier than I thought it would be
@@ -444,6 +443,9 @@ class Tile:
 
         # Export the .txt file
         with open(export_name + '.txt', 'w') as f:
+            if 751 <= tile_id <= 1000:
+                type_name = 'background' if data['tile_type'] == 'BGO' else 'block'
+                f.write(f'image = {type_name}-{tile_id}.png\n')
             for k in unconditional_settings:
                 f.write(self._export_txt_property(k, data[k]))
             tile_type_settings = bgo_settings if tile_type == 'BGO' else block_settings
