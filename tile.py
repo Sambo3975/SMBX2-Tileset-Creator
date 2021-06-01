@@ -7,6 +7,8 @@ import sys
 
 from tkinter import PhotoImage, NW, NORMAL, HIDDEN
 
+from PIL import Image
+
 
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -76,6 +78,8 @@ defaults = {
     # General information
     'tile_type': 'Block',
     'tile_id': '',
+    'grid_size': '16',    # The grid size as the tile was created (only used if grid_padding is nonzero)
+    'grid_padding': '0',  # The grid padding as the tile was created (used w/grid_size in _slice_n_splice)
 
     # Animation
     'frames': '1',
@@ -112,7 +116,8 @@ defaults = {
 }
 
 # Settings to be checked for all tiles
-unconditional_settings = ['tile_type', 'tile_id', 'frames', 'framespeed', 'no_shadows', 'light_source']
+unconditional_settings = ['tile_type', 'tile_id', 'frames', 'framespeed', 'no_shadows', 'light_source', 'grid_size',
+                          'grid_padding']
 # Settings for light sources only
 light_settings = ['lightoffsetx', 'lightoffsety', 'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker']
 # Settings for BGOs only
@@ -155,7 +160,7 @@ export_rules = {  # Fields without rules here will just use the default
     'slippery': lambda value: f'default-slippery={1 if value else 0}',
 }
 # These properties do not need to be written to the .txt file
-export_excluded = {'tile_type', 'tile_id', 'content_type', 'light_source'}
+export_excluded = {'tile_type', 'tile_id', 'content_type', 'light_source', 'grid_size', 'grid_padding'}
 
 
 class Tile:
@@ -167,7 +172,8 @@ class Tile:
         :return: None
         """
         for k in defaults.keys():
-            self.data[k] = tile_data[k].get()
+            if k not in {'grid_size', 'grid_padding'}:
+                self.data[k] = tile_data[k].get()
 
     def configure_bounding_box(self, **kwargs):
         """
@@ -188,6 +194,12 @@ class Tile:
 
         canvas.coords(poly, *new_pts)
 
+    def _scale_grid_settings(self, scale):
+        """Scale the tile's grid settings"""
+        data = self.data
+        data['grid_size'] = int(data['grid_size'] // self.scale * scale)
+        data['grid_padding'] = int(data['grid_padding'] // self.scale * scale)
+
     def set_scale(self, scale):
         """
         Set the scaling of the tile to <scale>
@@ -195,6 +207,7 @@ class Tile:
         :return: None
         """
         if scale != self.scale:
+            self._scale_grid_settings(scale)
             self._scale_poly(self.bounding_box, scale)
             self.canvas.delete(self.type_poly)
             self.type_poly = self.draw_type()
@@ -380,6 +393,35 @@ class Tile:
             return export_rules[key](value) + '\n'
         return export_rule_default(key, value) + '\n'
 
+    @staticmethod
+    def _slice_n_splice(image, grid_size, grid_padding):
+        """
+        Cuts out the padded areas out of the image
+        :param image: The image to slice 'n' splice
+        :type image: PIL.Image.Image
+        """
+        w = image.width
+        h = image.height
+
+        new_img = Image.new('RGBA', ((w + grid_padding) // (grid_size + grid_padding) * grid_size,
+                                     (h + grid_padding) // (grid_size + grid_padding) * grid_size))
+
+        y = 0
+        pad_y = 0
+        while y + pad_y < h:
+            x = 0
+            pad_x = 0
+            while x + pad_x < w:
+                chunk = image.crop((x + pad_x, y + pad_y, x + grid_size + pad_x, y + grid_size + pad_y))
+                # chunk.save(f'chunk-{x}-{y}.png')
+                new_img.paste(chunk, (x, y, x + grid_size, y + grid_size))
+                x += grid_size
+                pad_x += grid_padding
+            y += grid_size
+            pad_y += grid_padding
+
+        return new_img
+
     def export(self, image, path):
         """
         Export the tile to png and txt files for use in SMBX2.
@@ -395,7 +437,10 @@ class Tile:
 
         # Export the image
         # Easier than I thought it would be
-        image.crop(self.canvas.coords(self.bounding_box)).save(export_name + '.png')
+        image = image.crop(self.canvas.coords(self.bounding_box))
+        if int(data['grid_padding']) > 0:
+            image = self._slice_n_splice(image, int(data['grid_size']), int(data['grid_padding']))
+        image.save(export_name + '.png')
 
         # Export the .txt file
         with open(export_name + '.txt', 'w') as f:
@@ -439,6 +484,8 @@ class Tile:
         data = {}
         for k in defaults.keys():
             if k in kwargs:
+                # if k in {'grid_size', 'grid_padding'}:
+                #     kwargs[k] *= scale
                 data[k] = kwargs[k]
                 del kwargs[k]  # Remove the key so it won't be passed on to the Canvas items and cause an error
             else:

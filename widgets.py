@@ -166,10 +166,10 @@ class VerifiedWidget(ttk.Frame):
             self.columnconfigure(1, minsize=label_width)
 
         self.widget = widget_type(self, **widget_args)
-        try:
-            self.widget.configure(variable=variable)
-        except TclError:
-            self.widget.configure(textvariable=variable)
+        # try:
+        #     self.widget.configure(variable=variable)
+        # except TclError:
+        self.widget.configure(textvariable=variable)
         self.widget.configure(validate='all', validatecommand=(verify_reg, '%P'))
         if orientation == 'horizontal':
             self.label.grid(pady=4)
