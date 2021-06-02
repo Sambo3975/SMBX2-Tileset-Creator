@@ -44,17 +44,16 @@ Created by Sambo
 #   * The grid can now be offset horizontally and/or vertically.
 #   * The grid can now have padding added between cells.
 # Bugfixes:
-#   * Grid Size now shows the correct value on file load.
+#   * Exported tiles in the 751-1000 range will now show the correct images in PGE/Moondust.
 #   * Removed block-26 from the default ID list as it is used by playerblocktop NPCs. Nice one, Redigit.
+#   * Grid Size now shows the correct value on file load.
+#   * The scroll wheel can no longer be used on Comboboxes because it was causing issues.
 
-# TODO: Set image for tiles in the 751-1000 range as they default to custom.png
-# TODO: Option: Differing Grid Width/Height (done by entering wxh, i.e. 32x16)
 # TODO: Option: Tileset Name
 # TODO: Option: Tile Name
 # TODO: Option: Tile Description
-# TODO: Bug: Scrolling a Combobox doesn't trigger redraw.
-
 # TODO: Scrollbar for large tilesets
+# TODO: Option: Differing Grid Width/Height (done by entering wxh, i.e. 32x16)
 
 import os
 import pathlib
@@ -287,10 +286,6 @@ class Window(Tk):
                 data[k].set(file_data[k] if k in file_data else data_defaults[k])
                 if k in self.tileset_fields:
                     self.tileset_fields[k].check_variable()
-
-            # window.data['last_good_pixel_scale'].set(data['pixel_scale'].get())
-            # self.grid_size_box.widget.value.set(data['pixel_scale'])
-            # self.grid_padding_box.widget.value.set(data['grid_padding'])
 
             # Load the tiles
             canvas = self.tileset_canvas
@@ -1066,6 +1061,12 @@ class Window(Tk):
             self.iconbitmap(resource_path('data/icon.ico'))
         else:
             self.iconphoto(True, tix.PhotoImage(file=resource_path('data/icon_32.png')))
+        # Prevent scrolling comboboxes because doing so fails to trigger a redraw.
+        if sys.platform in {'win32', 'darwin'}:
+            self.unbind_class('TCombobox', '<MouseWheel>')
+        else:
+            self.unbind_class('TCombobox', '<ButtonPress-4>')
+            self.unbind_class('TCombobox', '<ButtonPress-5>')
         self.resizable(False, False)  # Prevent resizing of the window
         self.crashed = False
 
@@ -1163,8 +1164,8 @@ class Window(Tk):
                                        tooltip='Size of each grid square in pixels. Must be between 8 and 128, '
                                                'inclusive.')
         grid_size_box.grid(column=1, row=next_row(), sticky=W)
-        self.grid_size_box = grid_size_box
         tileset_inputs['grid_size'] = grid_size_box
+        self.grid_size_box = grid_size_box
 
         # Grid Padding
         w = VerifiedWidget(ttk.Spinbox, {'width': 6}, self.view_box, variable=self.data['grid_padding'],

@@ -336,9 +336,10 @@ class Tile:
         """Load the Tile's data to the UI"""
         data = self.data
         for k in defaults:
-            ui_data[k].set(data[k])
-            if k in ui_inputs:
-                ui_inputs[k].check_variable()
+            if k not in {'grid_size', 'grid_padding'}:
+                ui_data[k].set(data[k])
+                if k in ui_inputs:
+                    ui_inputs[k].check_variable()
 
     def get_save_ready_data(self):
         """
@@ -486,8 +487,6 @@ class Tile:
         data = {}
         for k in defaults.keys():
             if k in kwargs:
-                # if k in {'grid_size', 'grid_padding'}:
-                #     kwargs[k] *= scale
                 data[k] = kwargs[k]
                 del kwargs[k]  # Remove the key so it won't be passed on to the Canvas items and cause an error
             else:
