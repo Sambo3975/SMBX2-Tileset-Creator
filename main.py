@@ -43,13 +43,14 @@ Created by Sambo
 #   * The program can now be built on Linux and MacOS (thanks to some contributions from Wohlstand).
 #   * The grid can now be offset horizontally and/or vertically.
 #   * The grid can now have padding added between cells.
+#   * Added a Tileset Name option. This changes the name the tileset will have in PGE/Moondust, as well as the name of
+#   the tileset file.
 # Bugfixes:
 #   * Exported tiles in the 751-1000 range will now show the correct images in PGE/Moondust.
 #   * Removed block-26 from the default ID list as it is used by playerblocktop NPCs. Nice one, Redigit.
 #   * Grid Size now shows the correct value on file load.
 #   * The scroll wheel can no longer be used on Comboboxes because it was causing issues.
 
-# TODO: Option: Tileset Name
 # TODO: Option: Tile Name
 # TODO: Option: Tile Description
 # TODO: Scrollbar for large tilesets
@@ -60,6 +61,7 @@ import pathlib
 import sys
 import traceback
 import webbrowser
+from pathvalidate import sanitize_filename
 from datetime import datetime
 from tkinter import Tk, Menu, PhotoImage, Canvas, ttk, filedialog, messagebox, TclError, StringVar, BooleanVar
 from tkinter import NORMAL, DISABLED, NW, N, W, E, S, FALSE
@@ -99,6 +101,7 @@ data_defaults = {
     # Export
 
     'pixel_scale': '2',
+    'tileset_name': 'Imported Tileset',
     'block_ids': 'Avoid Special',
     'bgo_ids': 'Avoid Special',
     'create_pge_tileset': True,
@@ -106,7 +109,7 @@ data_defaults = {
 }
 
 tileset_fields = ['grid_size', 'grid_offset_x', 'grid_offset_y', 'grid_padding', 'show_grid', 'highlight_color',
-                  'pixel_scale', 'block_ids', 'bgo_ids', 'create_pge_tileset', 'start_high']
+                  'pixel_scale', 'tileset_name', 'block_ids', 'bgo_ids', 'create_pge_tileset', 'start_high']
 tile_fields = ['tile_type', 'tile_id', 'frames', 'framespeed', 'light_source', 'lightoffsetx', 'lightoffsety',
                'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker', 'priority', 'content_type', 'content_id',
                'playerfilter', 'npcfilter', 'collision_type', 'sizable', 'pswitchable', 'slippery', 'lava', 'bumpable',
@@ -392,12 +395,13 @@ class Window(Tk):
             tileset_layout[row].append(t)
             max_col = max(max_col, len(tileset_layout[row]))
 
+        tileset_name = f'{self.data["tileset_name"].get()} ({tile_type}s)'
         row_lookahead = 0
-        with open(f'{export_path}/{tile_type}s.tileset.ini', 'w') as f:
+        with open(f'{export_path}/{sanitize_filename(tileset_name)}.tileset.ini', 'w') as f:
             f.write(f'[tileset]\n'
                     f'rows={len(tileset_layout)}\n'
                     f'cols={max_col}\n'
-                    f'name=Imported {tile_type} Tileset\n'  # Make this configurable?
+                    f'name={tileset_name}\n'    # Make this configurable?
                     f'type={tile_type_int}\n')
             for row in range(len(tileset_layout)):
                 while row + row_lookahead not in tileset_layout:
@@ -1001,6 +1005,7 @@ class Window(Tk):
             # Export
 
             'pixel_scale': StringVar(),
+            'tileset_name': StringVar(),
             'block_ids': StringVar(),
             'bgo_ids': StringVar(),
             'create_pge_tileset': BooleanVar(),
@@ -1195,6 +1200,7 @@ class Window(Tk):
             .grid(column=1, row=next_row(), sticky=W)
 
         # Export Settings Section
+
         label = ttk.Label(self, text='Export Settings')
         self.export_box = ttk.LabelFrame(self.config_frame, labelwidget=label, padding='3 3 12 8')
         self.export_box.grid(column=1, row=2, sticky=(N, S, W, E))
@@ -1211,6 +1217,12 @@ class Window(Tk):
         pixel_scale_box.grid(column=1, row=next_row(), sticky=W)
         self.pixel_scale_box = pixel_scale_box
         tileset_inputs['pixel_scale'] = pixel_scale_box
+
+        # Tileset Name
+        ttk.Label(self.export_box, text='Tileset Name:').grid(column=1, row=next_row(), sticky=W)
+        w = ttk.Entry(self.export_box, width=16, textvariable=self.data['tileset_name'])
+        w.grid(column=1, row=next_row(), sticky=W)
+        CreateToolTip(w, 'The name the tileset will have in PGE/Moondust. Also affects the name of the tileset file.')
 
         # Block IDs
         w = VerifiedWidget(ttk.Combobox, {'values': ('Avoid Special', 'User Slots', ''), 'width': 12}, self.export_box,
