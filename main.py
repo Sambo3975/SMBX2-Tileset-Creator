@@ -51,8 +51,6 @@ Created by Sambo
 #   * Grid Size now shows the correct value on file load.
 #   * The scroll wheel can no longer be used on Comboboxes because it was causing issues.
 
-# TODO: Option: Tile Name
-# TODO: Option: Tile Description
 # TODO: Scrollbar for large tilesets
 # TODO: Option: Differing Grid Width/Height (done by entering wxh, i.e. 32x16)
 
@@ -1017,9 +1015,11 @@ class Window(Tk):
 
             # Tile Type (Block/BGO)
             'tile_type': StringVar(),
+            'tile_id': StringVar(),
+            'tile_name': StringVar(),
+            'tile_description': StringVar(),
 
             # Settings for both Blocks and BGOs
-            'tile_id': StringVar(),
             'frames': StringVar(),
             'framespeed': StringVar(),
 
@@ -1362,11 +1362,25 @@ class Window(Tk):
         self.tile_id_box.grid(column=1, row=next_row(), columnspan=2, sticky=W)
         tile_inputs['tile_id'] = self.tile_id_box
 
+        # Tile Name
+        ttk.Label(self.tile_settings_frame, text='Tile Name:').grid(column=3, row=1, sticky=W)
+        w = ttk.Entry(self.tile_settings_frame, textvariable=self.data['tile_name'], width=30)
+        w.grid(column=4, row=1, sticky=W)
+        CreateToolTip(w, 'The name the tile will have in PGE/Moondust. The tile\'s default name will be used if this is'
+                         ' not provided.')
+
+        # Tile Description
+        ttk.Label(self.tile_settings_frame, text='Tile Description:  ').grid(column=3, row=2, sticky=W)
+        w = ttk.Entry(self.tile_settings_frame, textvariable=self.data['tile_description'], width=30)
+        w.grid(column=4, row=2, sticky=W)
+        CreateToolTip(w, 'The description the tile will have in PGE/Moondust. The tile\'s default description will be '
+                         'used (most tiles have no description by default) if this is not provided.')
+
         # Tile Appearance Settings
 
         label = ttk.Label(self, text='Appearance')
         self.tile_appearance_frame = ttk.LabelFrame(self.tile_settings_frame, labelwidget=label, padding='3 3 12 8')
-        self.tile_appearance_frame.grid(column=1, columnspan=2, row=next_row(), sticky=(N, W))
+        self.tile_appearance_frame.grid(column=1, columnspan=3, row=next_row(), sticky=(N, W))
         self.tile_appearance_frame.columnconfigure(1, minsize=self.label_width_appearance, weight=0)
         self.tile_appearance_frame.columnconfigure(2, weight=1)
 
@@ -1459,7 +1473,7 @@ class Window(Tk):
 
         label = ttk.Label(self, text='Block Behavior')
         self.tile_behavior_frame = ttk.LabelFrame(self.tile_settings_frame, labelwidget=label, padding='3 3 12 8')
-        self.tile_behavior_frame.grid(column=3, row=3, sticky=(N, S, W), padx=4)
+        self.tile_behavior_frame.grid(column=4, row=3, sticky=(N, S, W), padx=4)
         self.tile_behavior_frame.columnconfigure(1, minsize=self.label_width_behavior, weight=0)
         self.tile_behavior_frame.columnconfigure(2, weight=1)
 

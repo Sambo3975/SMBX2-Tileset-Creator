@@ -78,6 +78,8 @@ defaults = {
     # General information
     'tile_type': 'Block',
     'tile_id': '',
+    'tile_name': '',
+    'tile_description': '',
     'grid_size': '16',    # The grid size as the tile was created (only used if grid_padding is nonzero)
     'grid_padding': '0',  # The grid padding as the tile was created (used w/grid_size in _slice_n_splice)
 
@@ -116,8 +118,8 @@ defaults = {
 }
 
 # Settings to be checked for all tiles
-unconditional_settings = ['tile_type', 'tile_id', 'frames', 'framespeed', 'no_shadows', 'light_source', 'grid_size',
-                          'grid_padding']
+unconditional_settings = ['tile_type', 'tile_id', 'tile_name', 'tile_description', 'frames', 'framespeed', 'no_shadows',
+                          'light_source', 'grid_size', 'grid_padding']
 # Settings for light sources only
 light_settings = ['lightoffsetx', 'lightoffsety', 'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker']
 # Settings for BGOs only
@@ -143,6 +145,12 @@ def export_rule_default(key, value):
     return f'{key} = {value}'
 
 
+def export_rule_non_empty(key, value):
+    if value == '':
+        return ''
+    return export_rule_default(key, value) + '\n'
+
+
 export_rules_collision_type = {
     # Need to cover all these fields to override any default behavior
     "Solid": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 0',
@@ -158,6 +166,8 @@ export_rules = {  # Fields without rules here will just use the default
     'collision_type': lambda value: export_rules_collision_type[value],
     'content_id_npc': lambda value: f'default-npc-content = {int(value) + 1000}',
     'slippery': lambda value: f'default-slippery={1 if value else 0}',
+    'tile_name': lambda value: export_rule_non_empty('name', value),
+    'tile_description': lambda value: export_rule_non_empty('description', value),
 }
 # These properties do not need to be written to the .txt file
 export_excluded = {'tile_type', 'tile_id', 'content_type', 'light_source', 'grid_size', 'grid_padding'}
@@ -391,7 +401,7 @@ class Tile:
             return ''
 
         if key in export_rules:
-            return export_rules[key](value) + '\n'
+            return export_rules[key](value)
         return export_rule_default(key, value) + '\n'
 
     @staticmethod
