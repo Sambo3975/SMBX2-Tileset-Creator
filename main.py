@@ -46,12 +46,13 @@ Created by Sambo
 #   * Added a Tileset Name option. This changes the name the tileset will have in PGE/Moondust, as well as the name of
 #   the tileset file.
 #   * Added scrollbars for large tileset images. These are activated if the loaded tileset image becomes larger than
-#   800x600 pixels.
+#   800x600 pixels. In addition to the scrollbars, the image can be scrolled vertically with the scroll wheel, and it
+#   can be scrolled horizontally with Shift + scroll wheel.
 # Bugfixes:
 #   * Exported tiles in the 751-1000 range will now show the correct images in PGE/Moondust.
 #   * Removed block-26 from the default ID list as it is used by playerblocktop NPCs. Nice one, Redigit.
 #   * Grid Size now shows the correct value on file load.
-#   * The scroll wheel can no longer be used on Comboboxes because it was causing issues.
+#   * The scroll wheel can no longer be used on Comboboxes, because it was causing issues.
 
 # TODO: Option: Differing Grid Width/Height (done by entering wxh, i.e. 32x16)
 
@@ -669,6 +670,18 @@ class Window(Tk):
     # ---------------------------------
     # Mouse Controls
     # ---------------------------------
+
+    def _scroll_h(self, event):
+        if sys.platform == 'darwin':
+            self.tileset_canvas.xview_scroll(event.delta, 'units')
+        else:
+            self.tileset_canvas.xview_scroll(int(-event.delta / 120), 'units')
+
+    def _scroll_v(self, event):
+        if sys.platform == 'darwin':
+            self.tileset_canvas.yview_scroll(event.delta, 'units')
+        else:
+            self.tileset_canvas.yview_scroll(int(-event.delta / 120), 'units')
 
     def _get_mouse_coords(self, event):
         """Get x, y from a mouse button down event"""
@@ -1328,6 +1341,15 @@ class Window(Tk):
         tileset_canvas.bind('<Button-1>', self.click)  # Binds a handler to a left-click within the canvas
         tileset_canvas.bind('<B1-Motion>', self.drag)  # left-click and drag
         tileset_canvas.bind('<ButtonRelease-1>', self.release)  # release left mouse button
+        # Scrollbars
+        if sys.platform in {'win32', 'darwin'}:
+            tileset_canvas.bind('<Shift-MouseWheel>', self._scroll_h)
+            tileset_canvas.bind('<MouseWheel>', self._scroll_v)
+        else:
+            tileset_canvas.bind('<Shift-Button-4>', self._scroll_h)
+            tileset_canvas.bind('<Shift-Button-5>', self._scroll_h)
+            tileset_canvas.bind('<Button-4>', self._scroll_v)
+            tileset_canvas.bind('<Button-5>', self._scroll_v)
         self.tileset_canvas = tileset_canvas
 
         # Horizontal Scrollbar
