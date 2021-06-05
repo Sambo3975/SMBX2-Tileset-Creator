@@ -45,13 +45,14 @@ Created by Sambo
 #   * The grid can now have padding added between cells.
 #   * Added a Tileset Name option. This changes the name the tileset will have in PGE/Moondust, as well as the name of
 #   the tileset file.
+#   * Added scrollbars for large tileset images. These are activated if the loaded tileset image becomes larger than
+#   800x600 pixels.
 # Bugfixes:
 #   * Exported tiles in the 751-1000 range will now show the correct images in PGE/Moondust.
 #   * Removed block-26 from the default ID list as it is used by playerblocktop NPCs. Nice one, Redigit.
 #   * Grid Size now shows the correct value on file load.
 #   * The scroll wheel can no longer be used on Comboboxes because it was causing issues.
 
-# TODO: Scrollbar for large tilesets
 # TODO: Option: Differing Grid Width/Height (done by entering wxh, i.e. 32x16)
 
 import os
@@ -84,6 +85,11 @@ MAX_BGO_ID = 303
 MAX_NPC_ID = 674
 
 SELECTOR_BD = 3
+
+CANVAS_W = 400
+CANVAS_H = 300
+CANVAS_MAX_W = 800
+CANVAS_MAX_H = 600
 
 data_defaults = {
 
@@ -263,7 +269,7 @@ class Window(Tk):
             self.grid_offset_x = None
             self.grid_offset_y = None
             self.grid_padding = None
-            window.tiles = []
+            self.tiles = []
 
             data = self.data
 
@@ -304,7 +310,9 @@ class Window(Tk):
             self.freeze_redraw_traces = False
             self.redraw_canvas()
 
-            self.tileset_canvas.grid(column=0, row=0)  # Make the canvas visible
+            self.tileset_canvas.grid()  # Make the canvas visible
+            self.scroll_x.grid()
+            self.scroll_y.grid()
 
             self.set_state_all_descendants(self.config_frame, NORMAL)  # Unlock tileset-global controls
             self.set_state_file_options(NORMAL)
@@ -506,8 +514,10 @@ class Window(Tk):
         if self.unsaved_changes and not self.save_prompt('closing the current file'):
             return
 
-        self.tileset_canvas.grid_forget()  # Remove the canvas from the layout
-        self.tileset_frame.configure(width=400, height=300)
+        self.tileset_canvas.grid_remove()  # Remove the canvas from the layout
+        self.scroll_x.grid_remove()
+        self.scroll_y.grid_remove()
+        self.tileset_frame.configure(width=CANVAS_W, height=CANVAS_H)
 
         self.tileset_image = None
 
@@ -666,8 +676,12 @@ class Window(Tk):
         # Prevent the user from starting a selection or expanding the selection outside of the tileset canvas
         # The little bit taken off the right and bottom is to account for the extra space added for the easternmost
         # and southernmost grid lines.
-        x = max(min(event.x, canvas.winfo_width() - 2), 0)
-        y = max(min(event.y, canvas.winfo_height() - 2), 0)
+        canvas = self.tileset_canvas
+        bbox = canvas.bbox('tileset_image')
+        x = canvas.canvasx(event.x)
+        y = canvas.canvasy(event.y)
+        x = max(min(x, bbox[2] - 2), 0)
+        y = max(min(y, bbox[3] - 2), 0)
         return x, y
 
     def _get_grid_aligned_extents(self, start_x, start_y, end_x, end_y):
@@ -818,7 +832,9 @@ class Window(Tk):
             self.tileset_image = image
 
         # Add an extra pixel on the bottom and right for the final grid lines
-        canvas.configure(width=image.width() + 1, height=image.height() + 1)
+        w = image.width() + 1
+        h = image.height() + 1
+        canvas.configure(scrollregion=(0, 0, w, h), width=min(w, CANVAS_MAX_W), height=min(h, CANVAS_MAX_H))
 
     def redraw_canvas(self, *args):
         if not self.freeze_redraw_traces:
@@ -1306,11 +1322,28 @@ class Window(Tk):
 
         # Tileset Canvas
         # No border, no highlight frame (these cause cutoff)
-        tileset_canvas = Canvas(self.tileset_frame, width=400, height=300, bd=0, highlightthickness=0)
+        tileset_canvas = Canvas(self.tileset_frame, width=CANVAS_W, height=CANVAS_H, bd=0, highlightthickness=0)
+        tileset_canvas.grid(column=0, row=0)
+        tileset_canvas.grid_remove()
         tileset_canvas.bind('<Button-1>', self.click)  # Binds a handler to a left-click within the canvas
         tileset_canvas.bind('<B1-Motion>', self.drag)  # left-click and drag
         tileset_canvas.bind('<ButtonRelease-1>', self.release)  # release left mouse button
         self.tileset_canvas = tileset_canvas
+
+        # Horizontal Scrollbar
+        scroll_x = ttk.Scrollbar(self.tileset_frame, orient='horizontal', command=tileset_canvas.xview)
+        scroll_x.grid(column=0, row=1, sticky=(E, W))
+        scroll_x.grid_remove()
+        self.scroll_x = scroll_x
+
+        # Vertical Scrollbar
+        scroll_y = ttk.Scrollbar(self.tileset_frame, orient='vertical', command=tileset_canvas.yview)
+        scroll_y.grid(column=1, row=0, sticky=(N, S))
+        scroll_y.grid_remove()
+        self.scroll_y = scroll_y
+
+        # Add the scrollbars to the canvas
+        tileset_canvas.configure(xscrollcommand=scroll_x.set, yscrollcommand=scroll_y.set)
 
         # Tileset Canvas Context Menu
         canvas_context_menu = Menu(tileset_canvas, tearoff=0)
