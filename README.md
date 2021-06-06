@@ -30,7 +30,8 @@ This program can work on Linux-based operating systems. It requires Python 3.8+.
 If you have the Debian-based distribution, you need to install the next dependencies from the package manager until you
 can get the program to work:
 ```bash
-sudo apt install tix-dev python3-tk python3-regex python3-pil
+sudo apt install tix-dev python3-tk python3-regex python3-pil python3-pip
+sudo -H pip3 install pathvalidate
 ```
 
 Then, clone this repository into any convenient directory and try to run the `main.py` script to start the program.
