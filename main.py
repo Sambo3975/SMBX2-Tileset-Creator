@@ -37,22 +37,11 @@ Created by Sambo
 # Changes in the next release
 # ----------------------------------
 # Features:
-#   * The grid can now be offset horizontally and/or vertically.
-#   * The grid can now have padding added between cells.
-#   * The grid can now have differing width and height. To do this, enter wxh into the Grid Size entry (i.e. 32x16).
-#   * Added scrollbars for large tileset images. These are activated if the displayed image becomes larger than
-#   800x600 pixels. In addition to the scrollbars, the image can be scrolled vertically with the scroll wheel, and it
-#   can be scrolled horizontally with Shift + scroll wheel.
-#   * Added a Tileset Name option. This changes the name the tileset will have in PGE/Moondust, as well as the name of
-#   the generated tileset files.
-#   * The program can now be built on Linux and MacOS (thanks to some contributions from Wohlstand).
+#   * The maximum width and height of the displayed image are now configurable. These options can be accessed through
+#   File > Preferences. The default dimensions have also been lowered to 400x300 pixels to resolve issues on smaller
+#   screens.
 # Bugfixes:
-#   * Exported tiles in the 751-1000 range will now show the correct images in PGE/Moondust.
-#   * Removed block-26 from the default ID list as it is used by playerblocktop NPCs. Nice one, Redigit.
-#   * Grid Size now shows the correct value on file load.
-#   * A prompt will now appear when attempting to close the program with unsaved changes.
-#   * All blocks will now default to having no item inside, even if the original block had one.
-#   * The scroll wheel can no longer be used on Comboboxes, because it was causing issues.
+#   * Fixed a crash that was occurring when Pixel Scale was changed after creating tiles.
 
 import os
 import pathlib
@@ -123,8 +112,8 @@ tile_fields = ['tile_type', 'tile_id', 'frames', 'framespeed', 'light_source', '
                'smashable']
 
 preference_defaults = {
-    'max_canvas_width': 800,
-    'max_canvas_height': 600,
+    'max_canvas_width': '400',
+    'max_canvas_height': '300',
 }
 preferences = ['max_canvas_width', 'max_canvas_height']
 
@@ -183,19 +172,25 @@ class Window(Tk):
                 preference_data = json.load(f)
             for k in preferences:
                 if k in preference_data:
-                    self.preferences[k] = preference_data[k]
+                    self.preferences[k].set(preference_data[k])
         for k in preferences:
             if k not in self.preferences:
-                self.preferences[k] = preference_defaults[k]
+                self.preferences[k].set(preference_defaults[k])
 
     def _save_preferences(self):
+        # Makes the preference fields show the correct values
+        for k in preferences:
+            self.preferences[k + '_raw'].set(self.preferences[k].get())
+        for k in self.preference_fields:
+            k.check_variable()
         preference_data = {}
         for k in preferences:
-            if self.preferences[k] != preference_defaults[k]:
-                preference_data[k] = self.preferences[k]
-        if len(preference_data) > 0:
-            with open('preferences.json', 'w') as f:
-                json.dump(preference_data, f)
+            if (v := self.preferences[k].get()) != preference_defaults[k]:
+                preference_data[k] = v
+        with open('preferences.json', 'w') as f:
+            json.dump(preference_data, f)
+        if self.loaded_file != '':
+            self.redraw_canvas()
 
     def close_window(self):
         """Add a save prompt if attempting to close the window with unsaved changes."""
@@ -292,6 +287,62 @@ class Window(Tk):
 
     def file_config(self):
         """Opens a window with configuration options."""
+        self.preference_fields = []
+        self.wm_attributes('-disabled', True)  # Lock the main window
+
+        preferences_dialog = tkinter.Toplevel(self)
+        preferences_dialog.title('Preferences')
+        if sys.platform == "win32":
+            preferences_dialog.iconbitmap(resource_path('data/icon.ico'))
+        else:
+            preferences_dialog.iconphoto(True, tix.PhotoImage(file=resource_path('data/icon_32.png')))
+        # preferences_dialog.minsize(300, 200)
+        preferences_dialog.transient(self)  # Make the file config window flash if you click on the main window
+        preferences_dialog.columnconfigure(0, weight=1, minsize=300)
+        preferences_dialog.rowconfigure(0, weight=1, minsize=200)
+
+        preferences_frame = ttk.LabelFrame(preferences_dialog, text='Tileset Display Settings', padding='3 3 12 8')
+        preferences_frame.grid(column=0, row=0, padx=5, pady=5, sticky=(N, W))
+
+        w = VerifiedWidget(ttk.Entry, {'width': 6}, preferences_frame, label_text='Max Display Width:', min_val=400,
+                           variable=self.preferences['max_canvas_width_raw'], label_width=120,
+                           last_good_variable=self.preferences['max_canvas_width'],
+                           tooltip='The maximum width of the tileset display, in pixels. If the displayed image becomes'
+                                   ' wider than this value, the scrollbar is activated. Must be at least 400.')
+        w.grid(column=1, row=next_row(1), sticky=(N, W))
+        self.preference_fields.append(w)
+
+        w = VerifiedWidget(ttk.Entry, {'width': 6}, preferences_frame, label_text='Max Display Height:', min_val=300,
+                           variable=self.preferences['max_canvas_height_raw'], label_width=120,
+                           last_good_variable=self.preferences['max_canvas_height'],
+                           tooltip='The maximum height of the tileset display, in pixels. If the displayed image '
+                                   'becomes taller than this value, the scrollbar is activated. Must be at least 300.')
+        w.grid(column=1, row=next_row(), sticky=(N, W))
+        self.preference_fields.append(w)
+
+        # Makes the preference fields show the correct values
+        for k in preferences:
+            self.preferences[k + '_raw'].set(self.preferences[k].get())
+
+        button_frame = ttk.Frame(preferences_dialog)
+        button_frame.grid(column=0, row=1, sticky=(E, W))
+        button_frame.columnconfigure(1, weight=1)
+
+        ttk.Button(button_frame, text='OK', command=self.close_file_config).grid(column=1, row=1, sticky=E, padx=2,
+                                                                                 pady=5)
+        ttk.Button(button_frame, text='Apply', command=self._save_preferences).grid(column=2, row=1, sticky=E, padx=2,
+                                                                                    pady=5)
+
+        # Closing the window will release the main window
+        preferences_dialog.protocol('WM_DELETE_WINDOW', self.close_file_config)
+
+        self.preferences_dialog = preferences_dialog
+
+    def close_file_config(self):
+        """Closes the configuration window."""
+        self.wm_attributes('-disabled', False)
+        self.preferences_dialog.destroy()
+        self.deiconify()
 
     def file_open(self, *args):
         """Open a file. If there is already a file open with unsaved data, ask the user if they would like to save
@@ -426,7 +477,7 @@ class Window(Tk):
             return  # Don't create an empty tileset file.
 
         grid_height = self._parse_grid_size(self.data['last_good_grid_size'].get())[0] \
-            * int(self.data['last_good_pixel_scale'].get())
+                      * int(self.data['last_good_pixel_scale'].get())
         tile_type_int = 1 if tile_type == 'BGO' else 0
         tiles = sorted(tiles)
 
@@ -445,7 +496,7 @@ class Window(Tk):
             f.write(f'[tileset]\n'
                     f'rows={len(tileset_layout)}\n'
                     f'cols={max_col}\n'
-                    f'name={tileset_name}\n'    # Make this configurable?
+                    f'name={tileset_name}\n'  # Make this configurable?
                     f'type={tile_type_int}\n')
             for row in range(len(tileset_layout)):
                 while row + row_lookahead not in tileset_layout:
@@ -907,8 +958,8 @@ class Window(Tk):
         # Add an extra pixel on the bottom and right for the final grid lines
         w = image.width() + 1
         h = image.height() + 1
-        max_w = self.preferences['max_canvas_width']
-        max_h = self.preferences['max_canvas_height']
+        max_w = int(self.preferences['max_canvas_width'].get())
+        max_h = int(self.preferences['max_canvas_height'].get())
         canvas.configure(scrollregion=(0, 0, w, h), width=min(w, max_w), height=min(h, max_h))
 
     def redraw_canvas(self, *args):
@@ -1024,7 +1075,7 @@ class Window(Tk):
             return True  # Don't care what's in the box if it's locked.
 
         return content_type == 'Coins' and 1 <= value <= 99 \
-            or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
+               or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
 
     @staticmethod
     def _verify_grid_size(value):
@@ -1741,7 +1792,15 @@ class Window(Tk):
         # Post-Construction
         # ----------------------------------------
 
-        self.preferences = {}
+        self.preferences_dialog = None
+        self.preferences = {
+            'max_canvas_width': StringVar(self, preference_defaults['max_canvas_width']),
+            'max_canvas_height': StringVar(self, preference_defaults['max_canvas_height']),
+
+            'max_canvas_width_raw': StringVar(),
+            'max_canvas_height_raw': StringVar(),
+        }
+        self.preference_fields = []
         self._load_preferences()
 
         self.protocol('WM_DELETE_WINDOW', self.close_window)  # Adds save prompt on exiting program
