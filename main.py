@@ -50,10 +50,9 @@ Created by Sambo
 #   * Exported tiles in the 751-1000 range will now show the correct images in PGE/Moondust.
 #   * Removed block-26 from the default ID list as it is used by playerblocktop NPCs. Nice one, Redigit.
 #   * Grid Size now shows the correct value on file load.
-#   * The scroll wheel can no longer be used on Comboboxes, because it was causing issues.
+#   * A prompt will now appear when attempting to close the program with unsaved changes.
 #   * All blocks will now default to having no item inside, even if the original block had one.
-
-# TODO: Bug: Closing with the 'X' button does not prompt to save on unsaved changes
+#   * The scroll wheel can no longer be used on Comboboxes, because it was causing issues.
 
 import os
 import pathlib
@@ -173,6 +172,11 @@ def resource_path(relative_path):
 
 class Window(Tk):
 
+    def close_window(self):
+        """Add a save prompt if attempting to close the window with unsaved changes."""
+        if not self.unsaved_changes or self.save_prompt('exiting'):
+            self.destroy()
+
     @staticmethod
     def warning_prompt(title, message):
         """
@@ -223,7 +227,7 @@ class Window(Tk):
         :type action str
         :return True if the action should proceed; false otherwise
         """
-        response = messagebox.askyesnocancel('Save', f'Save before {action}?')
+        response = messagebox.askyesnocancel('Save', f'There are unsaved changes. Save before {action}?')
         if response is not None:
             if response:
                 self.file_save()
@@ -1704,6 +1708,8 @@ class Window(Tk):
         # ----------------------------------------
         # Post-Construction
         # ----------------------------------------
+
+        self.protocol('WM_DELETE_WINDOW', self.close_window)
 
         for v in self.tile_fields.values():
             v.configure(good_value_callback=self._good_tile_field, bad_value_callback=self._bad_tile_field)
