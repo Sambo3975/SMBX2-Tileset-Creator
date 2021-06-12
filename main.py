@@ -7,9 +7,6 @@ This program streamlines the creation of tilesets in SMBX2 by automating the mos
 - Finding IDs for all the images
 - Creating the .tileset.ini file in PGE.**
 
-This program was designed for Windows and may not work right on other platforms. I figured this would be fine since
-SMBX doesn't run on anything but Windows (or Wine) anyway.
-
 ** Some manual rearrangement will likely be necessary for tilesets with blocks not all the same size.
 
 Created by Sambo
@@ -40,27 +37,31 @@ Created by Sambo
 # Changes in the next release
 # ----------------------------------
 # Features:
-#   * The program can now be built on Linux and MacOS (thanks to some contributions from Wohlstand).
 #   * The grid can now be offset horizontally and/or vertically.
 #   * The grid can now have padding added between cells.
-#   * Added a Tileset Name option. This changes the name the tileset will have in PGE/Moondust, as well as the name of
-#   the tileset file.
-#   * Added scrollbars for large tileset images. These are activated if the loaded tileset image becomes larger than
+#   * The grid can now have differing width and height. To do this, enter wxh into the Grid Size entry (i.e. 32x16).
+#   * Added scrollbars for large tileset images. These are activated if the displayed image becomes larger than
 #   800x600 pixels. In addition to the scrollbars, the image can be scrolled vertically with the scroll wheel, and it
 #   can be scrolled horizontally with Shift + scroll wheel.
+#   * Added a Tileset Name option. This changes the name the tileset will have in PGE/Moondust, as well as the name of
+#   the generated tileset files.
+#   * The program can now be built on Linux and MacOS (thanks to some contributions from Wohlstand).
 # Bugfixes:
 #   * Exported tiles in the 751-1000 range will now show the correct images in PGE/Moondust.
 #   * Removed block-26 from the default ID list as it is used by playerblocktop NPCs. Nice one, Redigit.
 #   * Grid Size now shows the correct value on file load.
 #   * The scroll wheel can no longer be used on Comboboxes, because it was causing issues.
+#   * All blocks will now default to having no item inside, even if the original block had one.
 
-# TODO: Option: Differing Grid Width/Height (done by entering wxh, i.e. 32x16)
+# TODO: Bug: Closing with the 'X' button does not prompt to save on unsaved changes
 
 import os
 import pathlib
 import sys
 import traceback
 import webbrowser
+from functools import lru_cache
+
 from pathvalidate import sanitize_filename
 from datetime import datetime
 from tkinter import Tk, Menu, PhotoImage, Canvas, ttk, filedialog, messagebox, TclError, StringVar, BooleanVar
@@ -91,6 +92,9 @@ CANVAS_W = 400
 CANVAS_H = 300
 CANVAS_MAX_W = 800
 CANVAS_MAX_H = 600
+
+MIN_GRID_DIM = 8
+MAX_GRID_DIM = 128
 
 data_defaults = {
 
@@ -389,14 +393,15 @@ class Window(Tk):
         if len(tiles) == 0:
             return  # Don't create an empty tileset file.
 
-        grid_size = int(self.data['last_good_grid_size'].get()) * int(self.data['last_good_pixel_scale'].get())
+        grid_height = self._parse_grid_size(self.data['last_good_grid_size'].get())[0] \
+            * int(self.data['last_good_pixel_scale'].get())
         tile_type_int = 1 if tile_type == 'BGO' else 0
         tiles = sorted(tiles)
 
         tileset_layout = {}
         max_col = 0
         for t in tiles:
-            row = int(t.canvas.coords(t.bounding_box)[1] // grid_size)
+            row = int(t.canvas.coords(t.bounding_box)[1] // grid_height)
             if row not in tileset_layout:
                 tileset_layout[row] = []
             tileset_layout[row].append(t)
@@ -590,7 +595,7 @@ class Window(Tk):
 
         zoom = self.tileset_image_zoom
         new_tile = Tile(canvas, x1, y1, x2, y2, outline=color, width=SELECTOR_BD, scale=self.tileset_image_zoom,
-                        tags='tile_bbox', grid_size=self.tileset_grid_size * zoom,
+                        tags='tile_bbox', grid_size=[zoom * x for x in self.tileset_grid_size],
                         grid_padding=self.grid_padding * zoom)
 
         self.tiles.append(new_tile)
@@ -699,15 +704,35 @@ class Window(Tk):
 
     def _get_grid_aligned_extents(self, start_x, start_y, end_x, end_y):
         """Get the grid-aligned extents of the area the user is selecting"""
+        # gp = self.grid_padding * zoom
+        # gs = self.tileset_grid_size * zoom + gp
+        # ox = self.grid_offset_x * zoom
+        # oy = self.grid_offset_y * zoom
+        # x1 = (min(start_x, end_x) - ox) // gs * gs + ox
+        # y1 = (min(start_y, end_y) - oy) // gs * gs + oy
+        # x2 = (max(start_x, end_x) + gs - ox) // gs * gs + ox - gp
+        # y2 = (max(start_y, end_y) + gs - oy) // gs * gs + oy - gp
+
         zoom = self.tileset_image_zoom
-        gp = self.grid_padding * zoom
-        gs = self.tileset_grid_size * zoom + gp
-        ox = self.grid_offset_x * zoom
-        oy = self.grid_offset_y * zoom
-        x1 = (min(start_x, end_x) - ox) // gs * gs + ox
-        y1 = (min(start_y, end_y) - oy) // gs * gs + oy
-        x2 = (max(start_x, end_x) + gs - ox) // gs * gs + ox - gp
-        y2 = (max(start_y, end_y) + gs - oy) // gs * gs + oy - gp
+        # (width, height) = self.tileset_grid_size
+        # width *= zoom
+        # height *= zoom
+        padding = self.grid_padding * zoom
+        width = self.tileset_grid_size[0] * zoom + padding
+        height = self.tileset_grid_size[1] * zoom + padding
+        offset_x = self.grid_offset_x * zoom
+        offset_y = self.grid_offset_y * zoom
+        # messagebox.showinfo('Debug', f'Zoom: {zoom}\n'
+        #                              f'Width: {width}\n'
+        #                              f'Height: {height}\n'
+        #                              f'Padding: {padding}\n'
+        #                              f'Offset X: {offset_x}\n'
+        #                              f'Offset Y: {offset_y}')
+        x1 = (min(start_x, end_x) - offset_x) // width * width + offset_x
+        y1 = (min(start_y, end_y) - offset_y) // height * height + offset_y
+        x2 = (max(start_x, end_x) + width - offset_x) // width * width + offset_x - padding
+        y2 = (max(start_y, end_y) + height - offset_y) // height * height + offset_y - padding
+
         return x1, y1, x2, y2
 
     def click(self, event):
@@ -795,7 +820,7 @@ class Window(Tk):
     def _redraw_tileset_grid(self, canvas):
         """Redraw the grid if Show Grid is enabled."""
         show_grid = self.data['show_grid'].get()
-        grid_size = int(self.data['last_good_grid_size'].get())
+        grid_size = self._parse_grid_size(self.data['last_good_grid_size'].get())
         grid_offset_x = int(self.data['last_good_grid_offset_x'].get())
         grid_offset_y = int(self.data['last_good_grid_offset_y'].get())
         grid_padding = int(self.data['last_good_grid_padding'].get())
@@ -812,14 +837,17 @@ class Window(Tk):
 
         if show_grid:
             image = self.tileset_image
-            grid_square_size = pixel_scale * grid_size
-            grid_offset_x %= grid_size + grid_padding
-            grid_offset_y %= grid_size + grid_padding
+            # grid_square_size = pixel_scale * grid_size
+            grid_width = pixel_scale * grid_size[0]
+            grid_height = pixel_scale * grid_size[1]
+            grid_offset_x %= grid_size[0] + grid_padding
+            grid_offset_y %= grid_size[1] + grid_padding
             grid_padding *= pixel_scale
             grid_offset_x *= pixel_scale
             grid_offset_y *= pixel_scale
 
-            for v in ((grid_offset_x - grid_padding, True), (grid_offset_y - grid_padding, False)):
+            for v in ((grid_offset_x - grid_padding, True, grid_width),
+                      (grid_offset_y - grid_padding, False, grid_height)):
                 s = v[0]
                 w = image.width() + 1
                 while s < w:
@@ -827,7 +855,7 @@ class Window(Tk):
                         self._draw_grid_line(canvas, s, v[1])
                         s += grid_padding
                     self._draw_grid_line(canvas, s, v[1])
-                    s += grid_square_size
+                    s += v[2]
 
     def _redraw_tileset_image(self, canvas):
         """Redraw the tileset image if the pixel scale has been changed."""
@@ -857,7 +885,7 @@ class Window(Tk):
             self._redraw_tiles()
 
             self.show_grid = self.data['show_grid'].get()
-            self.tileset_grid_size = int(self.data['last_good_grid_size'].get())
+            self.tileset_grid_size = self._parse_grid_size(self.data['last_good_grid_size'].get())
             self.grid_offset_x = int(self.data['last_good_grid_offset_x'].get())
             self.grid_offset_y = int(self.data['last_good_grid_offset_y'].get())
             self.grid_padding = int(self.data['last_good_grid_padding'].get())
@@ -962,7 +990,33 @@ class Window(Tk):
             return True  # Don't care what's in the box if it's locked.
 
         return content_type == 'Coins' and 1 <= value <= 99 \
-               or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
+            or content_type == 'NPC' and (1 <= value <= MAX_NPC_ID or 751 <= value <= 1000)
+
+    @staticmethod
+    def _verify_grid_size(value):
+        return regex.match(r'^[0-9x]+$', value) is not None
+
+    @staticmethod
+    def _verify_grid_dimension(value):
+        return MIN_GRID_DIM <= value <= MAX_GRID_DIM
+
+    @staticmethod
+    @lru_cache(maxsize=5)
+    def _parse_grid_size(value):
+        if (m := regex.match(r'^(\d+)(?:x(\d+))?$', value)) is not None:
+            dims = m.groups()
+            if dims[1] is None:
+                if Window._verify_grid_dimension(w := int(dims[0])):
+                    return w, w
+                return ()
+            if Window._verify_grid_dimension(w := int(dims[0])) and Window._verify_grid_dimension(h := int(dims[1])):
+                return w, h
+            return ()
+        return ()
+
+    @staticmethod
+    def _good_grid_size(value):
+        return Window._parse_grid_size(value) != ()
 
     # ---------------------------------
     # Widget Access Management
@@ -1107,7 +1161,7 @@ class Window(Tk):
         # Tileset image display trackers
         # These keep track of what is currently displayed so we know when the display needs to be redrawn
         self.tileset_image_zoom = None
-        self.tileset_grid_size = 0
+        self.tileset_grid_size = (0, 0)
         self.grid_offset_x = None
         self.grid_offset_y = None
         self.grid_padding = None
@@ -1192,8 +1246,9 @@ class Window(Tk):
             .grid(column=1, row=next_row(), sticky=W)
 
         # Grid Size
-        grid_size_box = VerifiedWidget(ttk.Combobox, {'values': ('8', '16', '32'), 'width': 6}, self.view_box,
-                                       variable=self.data['grid_size'], min_val=8, max_val=128, orientation='vertical',
+        grid_size_box = VerifiedWidget(ttk.Combobox, {'values': ('8', '16', '32', '32x16'), 'width': 6}, self.view_box,
+                                       variable=self.data['grid_size'], verify_function=self._verify_grid_size,
+                                       good_function=self._good_grid_size, orientation='vertical',
                                        label_text='Grid Size:', last_good_variable=self.data['last_good_grid_size'],
                                        tooltip='Size of each grid square in pixels. Must be between 8 and 128, '
                                                'inclusive.')
@@ -1435,7 +1490,7 @@ class Window(Tk):
 
         label = ttk.Label(self, text='Appearance')
         self.tile_appearance_frame = ttk.LabelFrame(self.tile_settings_frame, labelwidget=label, padding='3 3 12 8')
-        self.tile_appearance_frame.grid(column=1, columnspan=3, row=next_row(), sticky=(N, W))
+        self.tile_appearance_frame.grid(column=1, columnspan=3, row=next_row(), sticky=(N, W, E))
         self.tile_appearance_frame.columnconfigure(1, minsize=self.label_width_appearance, weight=0)
         self.tile_appearance_frame.columnconfigure(2, weight=1)
 

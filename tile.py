@@ -80,8 +80,8 @@ defaults = {
     'tile_id': '',
     'tile_name': '',
     'tile_description': '',
-    'grid_size': '16',    # The grid size as the tile was created (only used if grid_padding is nonzero)
-    'grid_padding': '0',  # The grid padding as the tile was created (used w/grid_size in _slice_n_splice)
+    'grid_size': 32,    # The grid size as the tile was created (only used if grid_padding is nonzero)
+    'grid_padding': 0,  # The grid padding as the tile was created (used w/grid_size in _slice_n_splice)
 
     # Animation
     'frames': '1',
@@ -153,19 +153,19 @@ def export_rule_non_empty(key, value):
 
 export_rules_collision_type = {
     # Need to cover all these fields to override any default behavior
-    "Solid": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 0',
-    "Semisolid": 'semisolid = true\npassthrough = false\nfloorslope = 0\nceilingslope = 0',
-    "Passthrough": 'semisolid = false\npassthrough = true\nfloorslope = 0\nceilingslope = 0',
-    "Slope ◢": 'semisolid = false\npassthrough = false\nfloorslope = -1\nceilingslope = 0',
-    "Slope ◣": 'semisolid = false\npassthrough = false\nfloorslope = 1\nceilingslope = 0',
-    "Slope ◥": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 1',
-    "Slope ◤": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = -1',
+    "Solid": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 0\n',
+    "Semisolid": 'semisolid = true\npassthrough = false\nfloorslope = 0\nceilingslope = 0\n',
+    "Passthrough": 'semisolid = false\npassthrough = true\nfloorslope = 0\nceilingslope = 0\n',
+    "Slope ◢": 'semisolid = false\npassthrough = false\nfloorslope = -1\nceilingslope = 0\n',
+    "Slope ◣": 'semisolid = false\npassthrough = false\nfloorslope = 1\nceilingslope = 0\n',
+    "Slope ◥": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 1\n',
+    "Slope ◤": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = -1\n',
 }
 export_rules = {  # Fields without rules here will just use the default
-    'no_shadows': lambda value: export_rule_default('noshadows', value),
+    'no_shadows': lambda value: export_rule_default('noshadows', value) + '\n',
     'collision_type': lambda value: export_rules_collision_type[value],
-    'content_id_npc': lambda value: f'default-npc-content = {int(value) + 1000}',
-    'slippery': lambda value: f'default-slippery={1 if value else 0}',
+    'content_id_npc': lambda value: f'default-npc-content = {int(value) + 1000}\n',
+    'slippery': lambda value: f'default-slippery = {1 if value else 0}\n',
     'tile_name': lambda value: export_rule_non_empty('name', value),
     'tile_description': lambda value: export_rule_non_empty('description', value),
 }
@@ -306,7 +306,6 @@ class Tile:
             self.canvas.itemconfigure(self.error_indicator, state=HIDDEN)
 
         # Ensure that the tile is always rendered above the grid.
-        # highest_above = canvas.find_above(self.bounding_box)
         canvas.tag_raise(self.bounding_box)
         canvas.tag_raise(self.type_poly)
         canvas.tag_raise(self.error_indicator)
@@ -413,9 +412,11 @@ class Tile:
         """
         w = image.width
         h = image.height
+        grid_w = grid_size[0]
+        grid_h = grid_size[1]
 
-        new_img = Image.new('RGBA', ((w + grid_padding) // (grid_size + grid_padding) * grid_size,
-                                     (h + grid_padding) // (grid_size + grid_padding) * grid_size))
+        new_img = Image.new('RGBA', ((w + grid_padding) // (grid_w + grid_padding) * grid_w,
+                                     (h + grid_padding) // (grid_h + grid_padding) * grid_h))
 
         y = 0
         pad_y = 0
@@ -423,11 +424,11 @@ class Tile:
             x = 0
             pad_x = 0
             while x + pad_x < w:
-                chunk = image.crop((x + pad_x, y + pad_y, x + grid_size + pad_x, y + grid_size + pad_y))
-                new_img.paste(chunk, (x, y, x + grid_size, y + grid_size))
-                x += grid_size
+                chunk = image.crop((x + pad_x, y + pad_y, x + grid_w + pad_x, y + grid_h + pad_y))
+                new_img.paste(chunk, (x, y, x + grid_w, y + grid_h))
+                x += grid_w
                 pad_x += grid_padding
-            y += grid_size
+            y += grid_h
             pad_y += grid_padding
 
         return new_img
@@ -449,7 +450,7 @@ class Tile:
         # Easier than I thought it would be
         image = image.crop(self.canvas.coords(self.bounding_box))
         if int(data['grid_padding']) > 0:
-            image = self._slice_n_splice(image, int(data['grid_size']), int(data['grid_padding']))
+            image = self._slice_n_splice(image, data['grid_size'], int(data['grid_padding']))
         image.save(export_name + '.png')
 
         # Export the .txt file
@@ -465,10 +466,13 @@ class Tile:
                     f.write(self._export_txt_property(k, data[k]))
             for k in tile_type_settings:
                 f.write(self._export_txt_property(k, data[k]))
-            if (content_type := data['content_type']) == 'NPC':
-                f.write(self._export_txt_property('content_id_npc', data['content_id']))
-            elif content_type == 'Coins':
-                f.write(self._export_txt_property('content_id', data['content_id']))
+            if tile_type == 'Block':
+                if (content_type := data['content_type']) == 'NPC':
+                    f.write(self._export_txt_property('content_id_npc', data['content_id']))
+                elif content_type == 'Coins':
+                    f.write(self._export_txt_property('content_id', data['content_id']))
+                else:  # To override blocks that originally had contents
+                    f.write(self._export_txt_property('content_id', 0))
 
     def __getitem__(self, item):
         return self.data[item]
