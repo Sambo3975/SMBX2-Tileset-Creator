@@ -57,6 +57,7 @@ Created by Sambo
 import os
 import pathlib
 import sys
+import tkinter
 import traceback
 import webbrowser
 from functools import lru_cache
@@ -89,8 +90,6 @@ SELECTOR_BD = 3
 
 CANVAS_W = 400
 CANVAS_H = 300
-CANVAS_MAX_W = 800
-CANVAS_MAX_H = 600
 
 MIN_GRID_DIM = 8
 MAX_GRID_DIM = 128
@@ -122,6 +121,12 @@ tile_fields = ['tile_type', 'tile_id', 'frames', 'framespeed', 'light_source', '
                'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker', 'priority', 'content_type', 'content_id',
                'playerfilter', 'npcfilter', 'collision_type', 'sizable', 'pswitchable', 'slippery', 'lava', 'bumpable',
                'smashable']
+
+preference_defaults = {
+    'max_canvas_width': 800,
+    'max_canvas_height': 600,
+}
+preferences = ['max_canvas_width', 'max_canvas_height']
 
 built_in_id_lists = {
     'Block': {
@@ -171,6 +176,26 @@ def resource_path(relative_path):
 
 
 class Window(Tk):
+
+    def _load_preferences(self):
+        if path.exists('preferences.json'):
+            with open('preferences.json', 'r') as f:
+                preference_data = json.load(f)
+            for k in preferences:
+                if k in preference_data:
+                    self.preferences[k] = preference_data[k]
+        for k in preferences:
+            if k not in self.preferences:
+                self.preferences[k] = preference_defaults[k]
+
+    def _save_preferences(self):
+        preference_data = {}
+        for k in preferences:
+            if self.preferences[k] != preference_defaults[k]:
+                preference_data[k] = self.preferences[k]
+        if len(preference_data) > 0:
+            with open('preferences.json', 'w') as f:
+                json.dump(preference_data, f)
 
     def close_window(self):
         """Add a save prompt if attempting to close the window with unsaved changes."""
@@ -264,6 +289,9 @@ class Window(Tk):
         """Clear the flag for unsaved changes. This should be called from file_save."""
         self.title(self.title().replace('*', ''))  # Change the window title to indicate there are no unsaved changes
         self.unsaved_changes = False
+
+    def file_config(self):
+        """Opens a window with configuration options."""
 
     def file_open(self, *args):
         """Open a file. If there is already a file open with unsaved data, ask the user if they would like to save
@@ -879,7 +907,9 @@ class Window(Tk):
         # Add an extra pixel on the bottom and right for the final grid lines
         w = image.width() + 1
         h = image.height() + 1
-        canvas.configure(scrollregion=(0, 0, w, h), width=min(w, CANVAS_MAX_W), height=min(h, CANVAS_MAX_H))
+        max_w = self.preferences['max_canvas_width']
+        max_h = self.preferences['max_canvas_height']
+        canvas.configure(scrollregion=(0, 0, w, h), width=min(w, max_w), height=min(h, max_h))
 
     def redraw_canvas(self, *args):
         if not self.freeze_redraw_traces:
@@ -1215,6 +1245,8 @@ class Window(Tk):
         self.menu_file.add_separator()
         self.menu_file.add_command(label='Clear Auto-Assigned IDs', command=self.file_clear_ids, state=DISABLED,
                                    tooltip='TEST')
+        self.menu_file.add_separator()
+        self.menu_file.add_command(label='Preferences...', command=self.file_config)
 
         # ------------------------------------------
         # Hotkeys
@@ -1709,7 +1741,10 @@ class Window(Tk):
         # Post-Construction
         # ----------------------------------------
 
-        self.protocol('WM_DELETE_WINDOW', self.close_window)
+        self.preferences = {}
+        self._load_preferences()
+
+        self.protocol('WM_DELETE_WINDOW', self.close_window)  # Adds save prompt on exiting program
 
         for v in self.tile_fields.values():
             v.configure(good_value_callback=self._good_tile_field, bad_value_callback=self._bad_tile_field)
