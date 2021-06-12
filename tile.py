@@ -207,7 +207,7 @@ class Tile:
     def _scale_grid_settings(self, scale):
         """Scale the tile's grid settings"""
         data = self.data
-        data['grid_size'] = int(data['grid_size'] // self.scale * scale)
+        data['grid_size'] = [x // self.scale * scale for x in data['grid_size']]
         data['grid_padding'] = int(data['grid_padding'] // self.scale * scale)
 
     def set_scale(self, scale):
