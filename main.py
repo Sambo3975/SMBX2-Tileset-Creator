@@ -40,8 +40,10 @@ Created by Sambo
 #   * The maximum width and height of the displayed image are now configurable. These options can be accessed through
 #   File > Preferences. The default dimensions have also been lowered to 400x300 pixels to resolve issues on smaller
 #   screens.
+#   * The .exe should now work on Windows 7
 # Bugfixes:
 #   * Fixed a crash that was occurring when Pixel Scale was changed after creating tiles.
+#   * Made the Grid Size entry a bit wider to accommodate differing grid width and height.
 
 import os
 import pathlib
@@ -787,30 +789,13 @@ class Window(Tk):
 
     def _get_grid_aligned_extents(self, start_x, start_y, end_x, end_y):
         """Get the grid-aligned extents of the area the user is selecting"""
-        # gp = self.grid_padding * zoom
-        # gs = self.tileset_grid_size * zoom + gp
-        # ox = self.grid_offset_x * zoom
-        # oy = self.grid_offset_y * zoom
-        # x1 = (min(start_x, end_x) - ox) // gs * gs + ox
-        # y1 = (min(start_y, end_y) - oy) // gs * gs + oy
-        # x2 = (max(start_x, end_x) + gs - ox) // gs * gs + ox - gp
-        # y2 = (max(start_y, end_y) + gs - oy) // gs * gs + oy - gp
 
         zoom = self.tileset_image_zoom
-        # (width, height) = self.tileset_grid_size
-        # width *= zoom
-        # height *= zoom
         padding = self.grid_padding * zoom
         width = self.tileset_grid_size[0] * zoom + padding
         height = self.tileset_grid_size[1] * zoom + padding
         offset_x = self.grid_offset_x * zoom
         offset_y = self.grid_offset_y * zoom
-        # messagebox.showinfo('Debug', f'Zoom: {zoom}\n'
-        #                              f'Width: {width}\n'
-        #                              f'Height: {height}\n'
-        #                              f'Padding: {padding}\n'
-        #                              f'Offset X: {offset_x}\n'
-        #                              f'Offset Y: {offset_y}')
         x1 = (min(start_x, end_x) - offset_x) // width * width + offset_x
         y1 = (min(start_y, end_y) - offset_y) // height * height + offset_y
         x2 = (max(start_x, end_x) + width - offset_x) // width * width + offset_x - padding
@@ -929,16 +914,15 @@ class Window(Tk):
             grid_offset_x *= pixel_scale
             grid_offset_y *= pixel_scale
 
-            for v in ((grid_offset_x - grid_padding, True, grid_width),
-                      (grid_offset_y - grid_padding, False, grid_height)):
+            for v in ((grid_offset_x - grid_padding, image.width() - 1, True, grid_width),
+                      (grid_offset_y - grid_padding, image.height() - 1, False, grid_height)):
                 s = v[0]
-                w = image.width() + 1
-                while s < w:
+                while s < v[1]:
                     if grid_padding > 0:
-                        self._draw_grid_line(canvas, s, v[1])
+                        self._draw_grid_line(canvas, s, v[2])
                         s += grid_padding
-                    self._draw_grid_line(canvas, s, v[1])
-                    s += v[2]
+                    self._draw_grid_line(canvas, s, v[2])
+                    s += v[3]
 
     def _redraw_tileset_image(self, canvas):
         """Redraw the tileset image if the pixel scale has been changed."""
@@ -1333,7 +1317,7 @@ class Window(Tk):
             .grid(column=1, row=next_row(), sticky=W)
 
         # Grid Size
-        grid_size_box = VerifiedWidget(ttk.Combobox, {'values': ('8', '16', '32', '32x16'), 'width': 6}, self.view_box,
+        grid_size_box = VerifiedWidget(ttk.Combobox, {'values': ('8', '16', '32', '32x16'), 'width': 8}, self.view_box,
                                        variable=self.data['grid_size'], verify_function=self._verify_grid_size,
                                        good_function=self._good_grid_size, orientation='vertical',
                                        label_text='Grid Size:', last_good_variable=self.data['last_good_grid_size'],
