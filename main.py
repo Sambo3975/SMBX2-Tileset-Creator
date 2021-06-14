@@ -36,14 +36,8 @@ Created by Sambo
 
 # Changes in the next release
 # ----------------------------------
-# Features:
-#   * The maximum width and height of the displayed image are now configurable. These options can be accessed through
-#   File > Preferences. The default dimensions have also been lowered to 400x300 pixels to resolve issues on smaller
-#   screens.
-#   * The .exe should now work on Windows 7
-# Bugfixes:
-#   * Fixed a crash that was occurring when Pixel Scale was changed after creating tiles.
-#   * Made the Grid Size entry a bit wider to accommodate differing grid width and height.
+
+# TODO: Encode text-based files in UTF-8.
 
 import os
 import pathlib

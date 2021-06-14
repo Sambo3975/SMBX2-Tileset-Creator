@@ -80,7 +80,7 @@ defaults = {
     'tile_id': '',
     'tile_name': '',
     'tile_description': '',
-    'grid_size': 32,    # The grid size as the tile was created (only used if grid_padding is nonzero)
+    'grid_size': (32, 32),    # The grid size as the tile was created (only used if grid_padding is nonzero)
     'grid_padding': 0,  # The grid padding as the tile was created (used w/grid_size in _slice_n_splice)
 
     # Animation
@@ -497,6 +497,10 @@ class Tile:
         tkinter.Canvas.itemconfigure
         """
         self.error_image = PhotoImage(file=resource_path('data/tile_error.png'))
+
+        # For backward compatibility with .tileset.json files created before v0.2.
+        if 'grid_size' in kwargs and type(old_val := kwargs['grid_size']) == int:
+            kwargs['grid_size'] = (old_val, old_val)
 
         data = {}
         for k in defaults.keys():
