@@ -1207,7 +1207,7 @@ class Window(Tk):
             v.trace_add('write', self._set_file_dirty)
 
         # Window settings
-        self.title("SMBX2 Tileset Importer")
+        self.title("SMBX2 Tileset Importer v0.2.2")
         if sys.platform == "win32":
             self.iconbitmap(resource_path('data/icon.ico'))
         else:
