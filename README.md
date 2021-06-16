@@ -141,25 +141,7 @@ The following features are planned for future releases. You can request a new fe
 
 ### General Features
 
-* A scrollbar for large tileset images.
-
-### Tileset Configurations
-
-**Name** -- The name the tileset will have in Moondust Editor. This will also affect the name of the
-`.tileset.ini` file itself. If not specified, the tileset will be named 'Imported (Block/BGO) Tileset'
-
-### Grid Configurations
-
-**Padding** -- Adds gaps between grid squares (tileset creators commonly place a 1 or 2 px gap between
-tiles)
-
-**Offsets** -- Horizontal and vertical offsets for the grid
-
-### Tile Configurations
-
-**Name** -- The name the tile will have in Moondust Editor. The tile's name will be something like 'Imported Tile' if not defined.
-
-**Description** -- The description the tile will have in Moondust Editor. This will be empty if not defined.
+**Tile Preview** -- Show a preview of the currently-selected tile. Useful for tiles with animations or tiles that take up multiple grid cells with padding between them.
 
 ### Placement Modes
 
@@ -173,8 +155,3 @@ overlap with other tiles when this is used (but no tiles will be placed that ove
 This will be separate from placement modes. The software will attempt to impute the collision type of new tiles
 from the image data in the selected area. This will be toggleable. This may not be included if it cannot be done
 efficiently.
-
-### Multi-edit
-
-Select multiple tiles with the selector and edit all at once. Fields that differ between the tiles will be blanked.
-Writing to a blanked field will still apply the change to all tiles. Don't know if this is really worth the effort.
