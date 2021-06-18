@@ -131,9 +131,7 @@ the tileset in Moondust Editor after you export.
 
 ## Known Issues
 
-* Clicking Cancel on a color selector causes a crash.
-* Entering a non-integer value in Grid Size or Pixel Scale causes a crash.
-* The Lava and P-Switch-able options show the wrong tooltips.
+* The Edible by Vine option for blocks does not work. This is a bug in SMBX2, not this software. It will be fixed in the next patch to SMBX2.
 
 ## Features Planned for Future Releases
 
