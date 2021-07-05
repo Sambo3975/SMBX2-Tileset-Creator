@@ -141,6 +141,8 @@ The following features are planned for future releases. You can request a new fe
 
 **Tile Preview** -- Show a preview of the currently-selected tile. Useful for tiles with animations or tiles that take up multiple grid cells with padding between them.
 
+**World Map Tiles** -- Support for world map tiles. Map Tile will be added as an option for tile type. Note that options for these will be very limited when compared with other tile types.
+
 ### Placement Modes
 
 **Single Tile** -- The only placement mode available in this release. Places a single tile in the selected area.
