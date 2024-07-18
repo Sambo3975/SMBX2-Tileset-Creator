@@ -129,10 +129,6 @@ The software will try to arrange the tiles in Moondust Editor tilesets as closel
 However, this is not always possible if tiles are of differing sizes. You may wish to make some minor adjustments to
 the tileset in Moondust Editor after you export.
 
-## Known Issues
-
-* The Edible by Vine option for blocks does not work. This is a bug in SMBX2, not this software. It will be fixed in the next patch to SMBX2.
-
 ## Features Planned for Future Releases
 
 The following features are planned for future releases. You can request a new feature [here](https://github.com/Sambo3975/SMBX2-Tileset-Creator/issues/new?assignees=&labels=&template=feature_request.md&title=). Approved feature requests will be added to this section.
@@ -142,6 +138,8 @@ The following features are planned for future releases. You can request a new fe
 **Tile Preview** -- Show a preview of the currently-selected tile. Useful for tiles with animations or tiles that take up multiple grid cells with padding between them.
 
 **World Map Tiles** -- Support for world map tiles. Map Tile will be added as an option for tile type. Note that options for these will be very limited when compared with other tile types.
+
+**Semisolid Slopes** -- Support for semisolid slopes. At the time of the original release, SMBX2 did not support semisolid slopes. However, this feature was recently added and should be supported by this tool.
 
 ### Placement Modes
 
