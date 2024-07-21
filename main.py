@@ -31,6 +31,9 @@ Created by Sambo
 # Changes in the next release
 # ----------------------------------
 
+# Features
+# - Added an option to create mixed PGE tilesets.
+
 # Improvements
 # - Increased maximum block, BGO, and NPC IDs to reflect those in the current SMBX2 release (b5).
 # - Added new non-special IDs to the default Avoid Special ID lists.
@@ -93,12 +96,14 @@ data_defaults = {
     'tileset_name': 'Imported Tileset',
     'block_ids': 'Avoid Special',
     'bgo_ids': 'Avoid Special',
-    'create_pge_tileset': True,
     'start_high': False,
+    'create_pge_tileset': True,
+    'mixed_pge_tileset': False,
 }
 
 tileset_fields = ['grid_size', 'grid_offset_x', 'grid_offset_y', 'grid_padding', 'show_grid', 'highlight_color',
-                  'pixel_scale', 'tileset_name', 'block_ids', 'bgo_ids', 'create_pge_tileset', 'start_high']
+                  'pixel_scale', 'tileset_name', 'block_ids', 'bgo_ids', 'start_high', 'create_pge_tileset',
+                  'mixed_pge_tileset']
 tile_fields = ['tile_type', 'tile_id', 'frames', 'framespeed', 'light_source', 'lightoffsetx', 'lightoffsety',
                'lightradius', 'lightbrightness', 'lightcolor', 'lightflicker', 'priority', 'content_type', 'content_id',
                'playerfilter', 'npcfilter', 'collision_type', 'sizable', 'pswitchable', 'slippery', 'lava', 'bumpable',
@@ -472,7 +477,9 @@ class Window(Tk):
 
         grid_height = self._parse_grid_size(self.data['last_good_grid_size'].get())[0] \
                       * int(self.data['last_good_pixel_scale'].get())
-        tile_type_int = 1 if tile_type == 'BGO' else 0
+        # Tileset type field doesn't appear to matter for mixed tilesets.
+        tile_type_int = 1 if tile_type in {'BGO', 'Mixed'} else 0
+        mixed = tile_type == 'Mixed'
         tiles = sorted(tiles)
 
         tileset_layout = {}
@@ -484,7 +491,9 @@ class Window(Tk):
             tileset_layout[row].append(t)
             max_col = max(max_col, len(tileset_layout[row]))
 
-        tileset_name = f'{self.data["tileset_name"].get()} ({tile_type}s)'
+        tileset_name = f'{self.data["tileset_name"].get()}'
+        if not mixed:
+            tileset_name += f' ({tile_type}s)'
         row_lookahead = 0
         with open(f'{export_path}/{sanitize_filename(tileset_name)}.tileset.ini', 'w') as f:
             f.write(f'[tileset]\n'
@@ -496,9 +505,12 @@ class Window(Tk):
                 while row + row_lookahead not in tileset_layout:
                     row_lookahead += 1
                 for col in range(len(tileset_layout[row + row_lookahead])):
+                    tile = tileset_layout[row + row_lookahead][col]
                     f.write(f'\n'
                             f'[item-{col}-{row}]\n'
-                            f'id={tileset_layout[row + row_lookahead][col].data["assigned_id"]}\n')
+                            f'id={tile.data["assigned_id"]}\n')
+                    if mixed:
+                        f.write(f'type={1 if tile.data["tile_type"] == "BGO" else 0}\n')
 
     def file_export(self, *args):
         """Export the tileset."""
@@ -584,8 +596,13 @@ class Window(Tk):
         # Generate PGE tileset file
 
         if data['create_pge_tileset'].get():
-            self._create_tileset_file(blocks, 'Block', export_path)
-            self._create_tileset_file(bgos, 'BGO', export_path)
+            if data['mixed_pge_tileset'].get():
+                while len(bgos) > 0:
+                    blocks.append(bgos.popleft())
+                self._create_tileset_file(blocks, 'Mixed', export_path)
+            else:
+                self._create_tileset_file(blocks, 'Block', export_path)
+                self._create_tileset_file(bgos, 'BGO', export_path)
 
         messagebox.showinfo('Done!', f'Successfully exported {len(blocks)} blocks and {len(bgos)} BGOs.')
 
@@ -615,11 +632,18 @@ class Window(Tk):
         for v in self.tiles:
             v.clear_assigned_id()
 
+    def update_create_pge_tileset(self, *_):
+        if self.create_pge_tileset.get():
+            self.mixed_pge_tileset_box.configure(state=NORMAL)
+        else:
+            self.mixed_pge_tileset_box.configure(state=DISABLED)
+            self.mixed_pge_tileset.set(False)
+
     # ---------------------------------
     # Tile Management
     # ---------------------------------
 
-    def redraw_current_tile(self, *args):
+    def redraw_current_tile(self, *_):
         """This handler is called when a setting is changed that alters how the current tile should be drawn"""
         if self.freeze_redraw_traces:
             return
@@ -635,7 +659,7 @@ class Window(Tk):
             if self.tiles[i].overlaps(selector):
                 return i
 
-    def update_collision_type(self, *args):
+    def update_collision_type(self, *_):
         collision_type = window.data['collision_type'].get()
         if collision_type == 'Semisolid ◢' or collision_type == 'Semisolid ◣':
             self.walkpaststair_box.configure(state=NORMAL)
@@ -1158,8 +1182,9 @@ class Window(Tk):
             'tileset_name': StringVar(),
             'block_ids': StringVar(),
             'bgo_ids': StringVar(),
-            'create_pge_tileset': BooleanVar(),
             'start_high': BooleanVar(),
+            'create_pge_tileset': BooleanVar(),
+            'mixed_pge_tileset': BooleanVar(),
 
             'last_good_pixel_scale': StringVar(self, data_defaults['pixel_scale']),
 
@@ -1420,11 +1445,20 @@ class Window(Tk):
                                       ' in a level.')
 
         self.create_pge_tileset = self.data['create_pge_tileset']
+        self.create_pge_tileset.trace_add('write', self.update_create_pge_tileset)
         pge_tileset_box = ttk.Checkbutton(self.export_box, text='Create PGE Tileset', variable=self.create_pge_tileset,
                                           offvalue=False, onvalue=True)
         pge_tileset_box.grid(column=1, row=next_row(), sticky=W)
         CreateToolTip(pge_tileset_box, 'Auto-generate a *.tileset.ini file for PGE containing all blocks in this '
                                        'tileset. This file will have the same name as the tileset image.')
+
+        self.mixed_pge_tileset = self.data['mixed_pge_tileset']
+        self.mixed_pge_tileset_box = ttk.Checkbutton(self.export_box, text='Mixed PGE Tileset',
+                                                     variable=self.mixed_pge_tileset, offvalue=False, onvalue=True)
+        self.mixed_pge_tileset_box.grid(column=1, row=next_row())
+        CreateToolTip(self.mixed_pge_tileset_box, 'If checked, a single, mixed PGE tileset will be created instead of '
+                                                  'separate block and BGO tilesets. Mixed tilesets require the SMBX2 '
+                                                  'b5 editor or later to function.')
 
         self.tileset_fields = tileset_inputs
 
