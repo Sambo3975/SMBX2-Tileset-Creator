@@ -56,18 +56,28 @@ def draw_slope_4(c, x1, y1, x2, y2):
     return c.create_polygon(x1 + T, y1 + T, x2 - T, y1 + T, x1 + T, y2 - T)
 
 
+def draw_semisolid_slope_1(c, x1, y1, x2, y2):
+    return c.create_polygon(x1 + T, y2 - T, x2 - T, y1 + T)
+
+
+def draw_semisolid_slope_2(c, x1, y1, x2, y2):
+    return c.create_polygon(x1 + T, y1 + T, x2 - T, y2 - T)
+
+
 def draw_passthrough(c, x1, y1, x2, y2):
     return draw_square_tile(c, x1, y1, x2, y2, True)
 
 
 tile_draw_functions = {
-    'Solid': draw_square_tile,
-    'Semisolid': draw_semisolid,
+    'Solid ■': draw_square_tile,
+    'Solid ◢': draw_slope_1,
+    'Solid ◣': draw_slope_2,
+    'Solid ◥': draw_slope_3,
+    'Solid ◤': draw_slope_4,
+    'Semisolid ■': draw_semisolid,
+    'Semisolid ◢': draw_semisolid_slope_1,
+    'Semisolid ◣': draw_semisolid_slope_2,
     'Passthrough': draw_passthrough,
-    'Slope ◢': draw_slope_1,
-    'Slope ◣': draw_slope_2,
-    'Slope ◥': draw_slope_3,
-    'Slope ◤': draw_slope_4,
 }
 
 # -------------------------------
@@ -101,7 +111,7 @@ defaults = {
     'priority': '-85',
 
     # Behavior (Block Exclusive)
-    'collision_type': 'Solid',
+    'collision_type': 'Solid ■',
     'content_type': 'Empty',
     'content_id': '1',
     'smashable': '0',
@@ -115,6 +125,7 @@ defaults = {
     'bumpable': False,
     'customhurt': False,
     'ediblebyvine': False,
+    'walkpaststair': False,
 }
 
 # Settings to be checked for all tiles
@@ -126,7 +137,7 @@ light_settings = ['lightoffsetx', 'lightoffsety', 'lightradius', 'lightbrightnes
 bgo_settings = ['priority']
 # Settings for Blocks only
 block_settings = ['collision_type', 'content_type', 'smashable', 'playerfilter', 'npcfilter', 'sizable', 'pswitchable',
-                  'slippery', 'lava', 'bumpable', 'customhurt', 'ediblebyvine']
+                  'slippery', 'lava', 'bumpable', 'customhurt', 'ediblebyvine', 'walkpaststair']
 content_settings = ['content_id']
 # All settings (for load) -- currently unused
 # all_settings = ['tile_type', 'tile_id', 'frames', 'framespeed', 'no_shadows', 'light_source', 'lightoffsetx',
@@ -151,15 +162,25 @@ def export_rule_non_empty(key, value):
     return export_rule_default(key, value) + '\n'
 
 
+legacy_to_new_collision_type = {
+    "Solid": "Solid ■",
+    "Slope ◢": "Solid ◢",
+    "Slope ◣": "Solid ◣",
+    "Slope ◥": "Solid ◥",
+    "Slope ◤": "Solid ◤",
+    "Semisolid": "Semisolid ■"
+}
 export_rules_collision_type = {
     # Need to cover all these fields to override any default behavior
-    "Solid": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 0\n',
-    "Semisolid": 'semisolid = true\npassthrough = false\nfloorslope = 0\nceilingslope = 0\n',
+    "Solid ■": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 0\n',
+    "Solid ◢": 'semisolid = false\npassthrough = false\nfloorslope = -1\nceilingslope = 0\n',
+    "Solid ◣": 'semisolid = false\npassthrough = false\nfloorslope = 1\nceilingslope = 0\n',
+    "Solid ◥": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 1\n',
+    "Solid ◤": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = -1\n',
+    "Semisolid ■": 'semisolid = true\npassthrough = false\nfloorslope = 0\nceilingslope = 0\n',
+    "Semisolid ◢": 'semisolid = true\npassthrough = false\nfloorslope = -1\nceilingslope = 0\n',
+    "Semisolid ◣": 'semisolid = true\npassthrough = false\nfloorslope = 1\nceilingslope = 0\n',
     "Passthrough": 'semisolid = false\npassthrough = true\nfloorslope = 0\nceilingslope = 0\n',
-    "Slope ◢": 'semisolid = false\npassthrough = false\nfloorslope = -1\nceilingslope = 0\n',
-    "Slope ◣": 'semisolid = false\npassthrough = false\nfloorslope = 1\nceilingslope = 0\n',
-    "Slope ◥": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = 1\n',
-    "Slope ◤": 'semisolid = false\npassthrough = false\nfloorslope = 0\nceilingslope = -1\n',
 }
 export_rules = {  # Fields without rules here will just use the default
     'no_shadows': lambda value: export_rule_default('noshadows', value) + '\n',
@@ -505,8 +526,13 @@ class Tile:
         data = {}
         for k in defaults.keys():
             if k in kwargs:
+
+                # For backward compatibility with .tileset.json files created before v0.3.
+                if k == "collision_type" and kwargs[k] in legacy_to_new_collision_type:
+                    kwargs[k] = legacy_to_new_collision_type[kwargs[k]]
+
                 data[k] = kwargs[k]
-                del kwargs[k]  # Remove the key so it won't be passed on to the Canvas items and cause an error
+                del kwargs[k]  # Remove the key, so it won't be passed on to the Canvas items and cause an error
             else:
                 data[k] = defaults[k]
         if 'assigned_id' in kwargs:

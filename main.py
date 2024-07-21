@@ -13,12 +13,6 @@ Created by Sambo
 """
 # Ideas for future releases
 # -----------------------------------
-# Option: Tileset name
-# Option: Tile name
-# Option: Tile description
-# Grid Options:
-#   Tile Padding: Adds gaps between grid squares (tileset creators commonly place a 1 or 2 px gap between tiles)
-#   Offsets: Allow the grid to be horizontally and/or horizontally offset
 # Placement Modes:
 #   Single Tile: Places a single solid tile covering the selected area
 #   Multi 1x1: Fills the selected area with 1x1 tiles; bonus points for handling tiles overlapping the selection
@@ -36,6 +30,14 @@ Created by Sambo
 
 # Changes in the next release
 # ----------------------------------
+
+# Features
+# - Added semisolid slope options for block collision type.
+# - Added Walk Past Stair setting for semisolid slopes.
+
+# Improvements
+# - The tooltip on the Grid Size option now indicates that a non-square grid can be set.
+# - The Light Flicker option now shows the correct tooltip.
 
 # TODO: Encode text-based files in UTF-8.
 
@@ -637,6 +639,14 @@ class Window(Tk):
             if self.tiles[i].overlaps(selector):
                 return i
 
+    def update_collision_type(self, *args):
+        collision_type = window.data['collision_type'].get()
+        if collision_type == 'Semisolid ◢' or collision_type == 'Semisolid ◣':
+            self.walkpaststair_box.configure(state=NORMAL)
+        else:
+            self.walkpaststair_box.configure(state=DISABLED)
+            window.data['walkpaststair'].set(False)
+
     def update_tile_type(self, *args):
         tile_type = window.data['tile_type'].get()
         if tile_type == 'Block':
@@ -1197,6 +1207,7 @@ class Window(Tk):
             'bumpable': BooleanVar(),
             'smashable': StringVar(),
             'customhurt': BooleanVar(),
+            'walkpaststair': BooleanVar(),
         }
 
         self.readonly_widget_map = {}  # List of readonly widgets (so they can be set back to readonly when unlocked
@@ -1207,7 +1218,7 @@ class Window(Tk):
             v.trace_add('write', self._set_file_dirty)
 
         # Window settings
-        self.title("SMBX2 Tileset Importer v0.2.2")
+        self.title("SMBX2 Tileset Importer v0.3.0")
         if sys.platform == "win32":
             self.iconbitmap(resource_path('data/icon.ico'))
         else:
@@ -1316,7 +1327,8 @@ class Window(Tk):
                                        good_function=self._good_grid_size, orientation='vertical',
                                        label_text='Grid Size:', last_good_variable=self.data['last_good_grid_size'],
                                        tooltip='Size of each grid square in pixels. Must be between 8 and 128, '
-                                               'inclusive.')
+                                               'inclusive. Enter a single number for a square grid or wxh (i.e. '
+                                               '32x16) for a non-square grid.')
         grid_size_box.grid(column=1, row=next_row(), sticky=W)
         tileset_inputs['grid_size'] = grid_size_box
         self.grid_size_box = grid_size_box
@@ -1642,7 +1654,7 @@ class Window(Tk):
         lf = ttk.Checkbutton(self.light_frame, variable=self.data['lightflicker'],
                              text='Light Flicker', offvalue=False, onvalue=True)
         lf.grid(column=1, row=next_row(), sticky=W)
-        CreateToolTip(lf, 'The color of the light source.')
+        CreateToolTip(lf, 'If checked, the light will flicker.')
 
         # Tile Behavior Settings
 
@@ -1653,14 +1665,16 @@ class Window(Tk):
         self.tile_behavior_frame.columnconfigure(2, weight=1)
 
         # Collision Type
-        # self.data['collision_type'].trace_add('write', self.update_tile_type)
+        self.data['collision_type'].trace_add('write', self.update_collision_type)
         ttk.Label(self.tile_behavior_frame, text='Collision Type:   ').grid(column=1, row=next_row(1), sticky=W, pady=4)
         ct = ttk.Combobox(self.tile_behavior_frame, state='readonly', textvariable=self.data['collision_type'],
                           width=12,
                           values=(
-                              "Solid", "Semisolid", "Passthrough", "Slope ◢", "Slope ◣", "Slope ◥", "Slope ◤"
+                              "Solid ■", "Solid ◢", "Solid ◣", "Solid ◥", "Solid ◤",
+                              "Semisolid ■", "Semisolid ◢", "Semisolid ◣", "Passthrough",
                           ))
         ct.grid(column=2, row=cur_row(), sticky=W)
+        CreateToolTip(ct, 'Collision type of the block. Semisolid slopes require SMBX2 Beta 5 or later to function.')
         self.readonly_widget_map[str(ct)] = True
 
         # Content Type
@@ -1763,6 +1777,14 @@ class Window(Tk):
                                            'adds it to a list in Lua so other code will identify it as harmful. To '
                                            'make a block harmful, you must make it replace a harmful block or use '
                                            'LunaLua.')
+
+        # Walk Past Stair
+        self.walkpaststair = self.data['walkpaststair']
+        self.walkpaststair_box = ttk.Checkbutton(self.tile_behavior_frame, text='Walk Past Stair',
+                                                 variable=self.walkpaststair, offvalue=False, onvalue=True)
+        self.walkpaststair_box.grid(column=2, row=next_row(), sticky=W)
+        CreateToolTip(self.walkpaststair_box, 'A player approaching a semisolid slope with this set will not ascend '
+                                              'the slope if the slope and the player are both touching flat ground. ')
 
         self.tile_fields = tile_inputs
 
