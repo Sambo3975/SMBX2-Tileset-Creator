@@ -139,7 +139,13 @@ The following features are planned for future releases. You can request a new fe
 
 **World Map Tiles** -- Support for world map tiles. Map Tile will be added as an option for tile type. Note that options for these will be very limited when compared with other tile types.
 
-**Semisolid Slopes** -- Support for semisolid slopes. At the time of the original release, SMBX2 did not support semisolid slopes. However, this feature was recently added and should be supported by this tool.
+**Tileset Combining** -- Take an existing SMBX2 tileset and combine its files into an image and .tileset.ini file. This would make this tool a complete replacement for FrozenQuills's Tileset Compiler/Separator, which hasn't been updated for some time.
+
+**Increased Tile Limits** -- There are now more basegame slots in use, so max block IDs have increased, and they should be increased in this tool as well.
+
+**Mixed Tilesets** -- Option to generate a single .tileset.ini file containing both blocks and BGOs. Mixed tilesets were added in the latest PGE/SMBX2 Editor versions.
+
+**Solid Sizable Script Generation** -- Automatically generate a simple lua library that makes all solid sizables in the tileset work. This library would still need to be manually loaded in the level or world's luna.lua file.
 
 ### Placement Modes
 
