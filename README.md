@@ -139,7 +139,7 @@ The following features are planned for future releases. You can request a new fe
 
 **World Map Tiles** -- Support for world map tiles. Map Tile will be added as an option for tile type. Note that options for these will be very limited when compared with other tile types.
 
-**Semisolid Slopes** -- Support for semisolid slopes. At the time of the original release, SMBX2 did not support semisolid slopes. However, this feature was recently added and should be supported by this tool.
+**Tileset Combining** -- Take an existing SMBX2 tileset and combine its files into an image and .tileset.ini file. This would make the program a complete replacement for FrozenQuills's Tileset Compiler/Separator, which hasn't been updated for some time.
 
 ### Placement Modes
 
