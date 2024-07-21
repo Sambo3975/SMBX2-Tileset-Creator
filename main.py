@@ -31,15 +31,10 @@ Created by Sambo
 # Changes in the next release
 # ----------------------------------
 
-# Features
-# - Added semisolid slope options for block collision type.
-# - Added Walk Past Stair setting for semisolid slopes.
-
 # Improvements
-# - The tooltip on the Grid Size option now indicates that a non-square grid can be set.
-# - The Light Flicker option now shows the correct tooltip.
-
-# TODO: Encode text-based files in UTF-8.
+# - Increased maximum block, BGO, and NPC IDs to reflect those in the current SMBX2 release (b5).
+# - Added new non-special IDs to the default Avoid Special ID lists.
+# - Removed outdated information from the Sizable tooltip.
 
 import os
 import pathlib
@@ -69,9 +64,9 @@ from tooltip import CreateToolTip, MenuTooltip
 from widgets import ColorSelector, VerifiedWidget
 from tile import Tile
 
-MAX_BLOCK_ID = 1291
-MAX_BGO_ID = 303
-MAX_NPC_ID = 674
+MAX_BLOCK_ID = 1393
+MAX_BGO_ID = 377
+MAX_NPC_ID = 723
 
 SELECTOR_BD = 3
 
@@ -119,12 +114,13 @@ built_in_id_lists = {
     'Block': {
         'Avoid Special': '1;3;6-25;27-29;38-54;56-59;61-87;91-108;113-114;116-168;182-191;194-223;227-266;270-279;'
                          '284-370;372-403;407-419;421-427;432-456;488-525;527-597;599-619;630;635-638;1001-1005;'
-                         '1008-1072;1076-1101;1106-1132;1138-1141;1156-1267;1269-1270',
+                         '1008-1072;1076-1101;1106-1132;1138-1141;1156-1267;1269-1270;1296-1305;1328-1329;1376-1377;'
+                         '1386-1393',
         'User Slots': '751-1000',
     },
     'BGO': {
         'Avoid Special': '1-10;14-34;36-59;62-69;75-86;89-91;93-97;99;101-103;106;108-133;147-159;161-173;187-190;232'
-                         '-279;281-303',
+                         '-279;281-303;304-326;328-353;367-377',
         'User Slots': '751-1000',
     }
 }
@@ -300,14 +296,14 @@ class Window(Tk):
         preferences_dialog.rowconfigure(0, weight=1, minsize=200)
 
         preferences_frame = ttk.LabelFrame(preferences_dialog, text='Tileset Display Settings', padding='3 3 12 8')
-        preferences_frame.grid(column=0, row=0, padx=5, pady=5, sticky=(N, W))
+        preferences_frame.grid(column=0, row=0, padx=5, pady=5, sticky='nw')
 
         w = VerifiedWidget(ttk.Entry, {'width': 6}, preferences_frame, label_text='Max Display Width:', min_val=400,
                            variable=self.preferences['max_canvas_width_raw'], label_width=120,
                            last_good_variable=self.preferences['max_canvas_width'],
                            tooltip='The maximum width of the tileset display, in pixels. If the displayed image becomes'
                                    ' wider than this value, the scrollbar is activated. Must be at least 400.')
-        w.grid(column=1, row=next_row(1), sticky=(N, W))
+        w.grid(column=1, row=next_row(1), sticky='nw')
         self.preference_fields.append(w)
 
         w = VerifiedWidget(ttk.Entry, {'width': 6}, preferences_frame, label_text='Max Display Height:', min_val=300,
@@ -315,7 +311,7 @@ class Window(Tk):
                            last_good_variable=self.preferences['max_canvas_height'],
                            tooltip='The maximum height of the tileset display, in pixels. If the displayed image '
                                    'becomes taller than this value, the scrollbar is activated. Must be at least 300.')
-        w.grid(column=1, row=next_row(), sticky=(N, W))
+        w.grid(column=1, row=next_row(), sticky='nw')
         self.preference_fields.append(w)
 
         # Makes the preference fields show the correct values
@@ -323,7 +319,7 @@ class Window(Tk):
             self.preferences[k + '_raw'].set(self.preferences[k].get())
 
         button_frame = ttk.Frame(preferences_dialog)
-        button_frame.grid(column=0, row=1, sticky=(E, W))
+        button_frame.grid(column=0, row=1, sticky='ew')
         button_frame.columnconfigure(1, weight=1)
 
         ttk.Button(button_frame, text='OK', command=self.close_file_config).grid(column=1, row=1, sticky=E, padx=2,
@@ -1256,7 +1252,7 @@ class Window(Tk):
         self.label_width_behavior = 100
 
         self.mainframe = ttk.Frame(self, padding="3 3 12 12")  # cover the root with a frame that has a modern style
-        self.mainframe.grid(column=0, row=0, sticky=(N, W, E, S))  # placed directly in application window
+        self.mainframe.grid(column=0, row=0, sticky='news')  # placed directly in application window
         self.columnconfigure(0, weight=1)  # fill the whole window vertically, even when resized
         self.rowconfigure(0, weight=1)  # same horizontally
 
@@ -1310,7 +1306,7 @@ class Window(Tk):
 
         label = ttk.Label(self, text='View')  # Using a label widget so I can gray it out when disabled
         self.view_box = ttk.LabelFrame(self.config_frame, labelwidget=label, padding='3 3 12 8')
-        self.view_box.grid(column=1, row=1, sticky=(W, E))
+        self.view_box.grid(column=1, row=1, sticky='we')
 
         # Highlight Color
         self.highlight_color = self.data['highlight_color']
@@ -1364,7 +1360,7 @@ class Window(Tk):
 
         label = ttk.Label(self, text='Export Settings')
         self.export_box = ttk.LabelFrame(self.config_frame, labelwidget=label, padding='3 3 12 8')
-        self.export_box.grid(column=1, row=2, sticky=(N, S, W, E))
+        self.export_box.grid(column=1, row=2, sticky='news')
 
         # Pixel Scale
         pixel_scale_box = VerifiedWidget(ttk.Combobox, {'values': ('1', '2', '4'), 'width': 6}, self.export_box,
@@ -1442,7 +1438,7 @@ class Window(Tk):
         # Launch Frame
         # This is what will be visible on launch. It tells the user that no file is open and offers an open button.
         self.launch_frame = ttk.Frame(self.tileset_frame)
-        self.launch_frame.place(in_=self.tileset_frame, anchor='c', relx=.5, rely=.5)
+        self.launch_frame.place(in_=self.tileset_frame, anchor='center', relx=.5, rely=.5)
         ttk.Label(self.launch_frame, text='No tileset image currently loaded.', padding='0 0 4 4') \
             .grid(column=1, row=next_row(1))
         ttk.Button(self.launch_frame, text='Open Image', command=self.file_open).grid(column=1, row=next_row())
@@ -1486,13 +1482,13 @@ class Window(Tk):
 
         # Horizontal Scrollbar
         scroll_x = ttk.Scrollbar(self.tileset_frame, orient='horizontal', command=tileset_canvas.xview)
-        scroll_x.grid(column=0, row=1, sticky=(E, W))
+        scroll_x.grid(column=0, row=1, sticky='ew')
         scroll_x.grid_remove()
         self.scroll_x = scroll_x
 
         # Vertical Scrollbar
         scroll_y = ttk.Scrollbar(self.tileset_frame, orient='vertical', command=tileset_canvas.yview)
-        scroll_y.grid(column=1, row=0, sticky=(N, S))
+        scroll_y.grid(column=1, row=0, sticky='ns')
         scroll_y.grid_remove()
         self.scroll_y = scroll_y
 
@@ -1543,7 +1539,8 @@ class Window(Tk):
                                                   'special interactions such as item blocks, spikes, filters, '
                                                   'or line guides. Leave this field blank to automatically assign '
                                                   'an ID from the Block or BGO IDs pool.\n\n'
-                                                  f'For blocks, this ID must be between 1 and {MAX_BLOCK_ID}.\n'
+                                                  f'For blocks, this ID must be between 1 and {MAX_BLOCK_ID} or '
+                                                  f'between 751 and 1000.\n '
                                                   f'For BGOs, it must be between 1 and {MAX_BGO_ID} or between 751 '
                                                   'and 1000.')
         self.tile_id_box.grid(column=1, row=next_row(), columnspan=2, sticky=W)
@@ -1567,7 +1564,7 @@ class Window(Tk):
 
         label = ttk.Label(self, text='Appearance')
         self.tile_appearance_frame = ttk.LabelFrame(self.tile_settings_frame, labelwidget=label, padding='3 3 12 8')
-        self.tile_appearance_frame.grid(column=1, columnspan=3, row=next_row(), sticky=(N, W, E))
+        self.tile_appearance_frame.grid(column=1, columnspan=3, row=next_row(), sticky='new')
         self.tile_appearance_frame.columnconfigure(1, minsize=self.label_width_appearance, weight=0)
         self.tile_appearance_frame.columnconfigure(2, weight=1)
 
@@ -1660,7 +1657,7 @@ class Window(Tk):
 
         label = ttk.Label(self, text='Block Behavior')
         self.tile_behavior_frame = ttk.LabelFrame(self.tile_settings_frame, labelwidget=label, padding='3 3 12 8')
-        self.tile_behavior_frame.grid(column=4, row=3, sticky=(N, S, W), padx=4)
+        self.tile_behavior_frame.grid(column=4, row=3, sticky='nsw', padx=4)
         self.tile_behavior_frame.columnconfigure(1, minsize=self.label_width_behavior, weight=0)
         self.tile_behavior_frame.columnconfigure(2, weight=1)
 
@@ -1727,10 +1724,7 @@ class Window(Tk):
         self.sizable_box = ttk.Checkbutton(self.tile_behavior_frame, text='Sizable', variable=self.sizable,
                                            offvalue=False, onvalue=True)
         self.sizable_box.grid(column=1, row=next_row(), sticky=W)
-        CreateToolTip(self.sizable_box, 'Sizable. If checked, the block should occupy a 3x3 space on the grid. '
-                                        'Otherwise, weird things will happen in SMBX. Due to some unfortunate '
-                                        'limitations, if you want a sizable that is not semisolid, you\'ll have to '
-                                        'draw it manually in LunaLua.')
+        CreateToolTip(self.sizable_box, 'Sizable. Sizable blocks may be semisolid or passthrough, but cannot be solid.')
 
         # Lava
         self.lava = self.data['lava']

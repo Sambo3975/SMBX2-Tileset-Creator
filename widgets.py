@@ -161,7 +161,7 @@ class VerifiedWidget(ttk.Frame):
         # Lay out all the widgets
 
         self.label = ttk.Label(self, text=label_text)
-        self.label.grid(column=1, row=1, sticky=(E, W))
+        self.label.grid(column=1, row=1, sticky='ew')
         if label_width is not None:
             self.columnconfigure(1, minsize=label_width)
 
@@ -247,7 +247,7 @@ if __name__ == '__main__':
             raise ValueError('not a string?')
 
     window.mainframe = ttk.Frame(window, padding='3 3 12 12')
-    window.mainframe.grid(column=0, row=0, sticky=(N, W, E, S))
+    window.mainframe.grid(column=0, row=0, sticky='news')
 
     ttk.Label(window.mainframe, text='Color Chooser:').grid(column=1, row=next_row())
     color_selector = ColorSelector(window.mainframe, color='red', tooltip='Pick a color', variable=data['color'])
