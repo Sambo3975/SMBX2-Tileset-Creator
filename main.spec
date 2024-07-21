@@ -52,7 +52,7 @@ if sys.platform == "darwin":
             name='SMBX2 Tileset Importer.app',
             icon='data/icon.icns',
             bundle_identifier='SMBX2 Tileset Importer',
-            version='0.3.0',
+            version='0.4.0',
             info_plist={
                 'NSPrincipalClass': 'NSApplication',
                 'NSAppleScriptEnabled': False,
