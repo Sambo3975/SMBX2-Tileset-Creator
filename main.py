@@ -599,6 +599,9 @@ class Window(Tk):
 
         # Generate PGE tileset file
 
+        block_count = len(blocks)
+        bgo_count = len(bgos)
+
         if data['create_pge_tileset'].get():
             if data['mixed_pge_tileset'].get():
                 while len(bgos) > 0:
@@ -608,7 +611,7 @@ class Window(Tk):
                 self._create_tileset_file(blocks, 'Block', export_path)
                 self._create_tileset_file(bgos, 'BGO', export_path)
 
-        messagebox.showinfo('Done!', f'Successfully exported {len(blocks)} blocks and {len(bgos)} BGOs.')
+        messagebox.showinfo('Done!', f'Successfully exported {block_count} blocks and {bgo_count} BGOs.')
 
     def file_close(self, *args):
         """Close the file that is currently open. If there is unsaved data, ask the user if they would like to save
