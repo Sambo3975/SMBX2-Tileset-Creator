@@ -32,6 +32,7 @@ Created by Sambo
 # ----------------------------------
 
 # Features
+# - Added a tile preview pane.
 # - Added an option to create mixed PGE tilesets.
 
 # Improvements
@@ -60,7 +61,7 @@ import json
 
 import PIL.Image
 import regex as regex
-from PIL import Image
+from PIL import Image, ImageTk
 
 from orderedset import OrderedSet
 from tooltip import CreateToolTip, MenuTooltip
@@ -343,7 +344,7 @@ class Window(Tk):
         self.preferences_dialog.destroy()
         self.deiconify()
 
-    def file_open(self, *args):
+    def file_open(self, *_):
         """Open a file. If there is already a file open with unsaved data, ask the user if they would like to save
         first."""
         filename = filedialog.askopenfilename(filetypes=(('PNG files', '*.png'), ("All files", "*.*")))
@@ -390,7 +391,7 @@ class Window(Tk):
 
             # Load each tile into the UI once so its fields are checked.
             for i in range(len(self.tiles)):
-                self.load_tile(i)
+                self.load_tile(i, False)
                 self.tiles[i].deselect()
             self.load_tile()
 
@@ -405,6 +406,9 @@ class Window(Tk):
             self.set_state_file_options(NORMAL)
 
             self._update_opened_filename(filename)
+
+            self.tile_preview_canvas.delete('all')
+            self.tile_preview_image = None
 
             # Forces Grid Size and Grid Padding to show the right values on file load
             data['grid_size'].set(data['last_good_grid_size'].get())
@@ -621,6 +625,9 @@ class Window(Tk):
 
         self.tileset_image = None
 
+        self.tile_preview_canvas.delete('all')
+        self.tile_preview_image = None
+
         self.set_state_all_descendants(self.config_frame, DISABLED)
         self.set_state_all_descendants(self.tile_frame, DISABLED)
         self.set_state_file_options(DISABLED)
@@ -713,19 +720,19 @@ class Window(Tk):
 
         return len(self.tiles) - 1
 
-    def load_tile(self, index=None):
+    def load_tile(self, index=None, load_preview=True):
         """Load the tile's settings into the tile settings field. Has no effect if the tile at index is already
         loaded. """
 
         # If no index is passed, we are loading no tile, and should lock all tile settings fields
         if index is None:
-            self.set_state_all_descendants(self.tile_settings_frame, DISABLED)
+            self.set_state_all_descendants(self.tile_frame, DISABLED)
             self.current_tile_index = -1
             return
 
         # If there was previously no index selected, we need to unlock all the tile settings fields
         if self.current_tile_index == -1:
-            self.set_state_all_descendants(self.tile_settings_frame, NORMAL)
+            self.set_state_all_descendants(self.tile_frame, NORMAL)
 
         self.freeze_redraw_traces = True
 
@@ -739,6 +746,9 @@ class Window(Tk):
         for v in self.tile_fields.values():
             if not v.good_input:
                 tile_data.increment_bad_field_count()
+
+        if load_preview:
+            tile_data.load_preview(self)
 
         self.freeze_redraw_traces = False
 
@@ -973,6 +983,7 @@ class Window(Tk):
     def redraw_canvas(self, *args):
         if not self.freeze_redraw_traces:
             canvas = self.tileset_canvas
+            # canvas = self.tile_preview_canvas
             self._redraw_tileset_image(canvas)
             self._redraw_tileset_grid(canvas)
             self._redraw_tiles()
@@ -1816,6 +1827,17 @@ class Window(Tk):
 
         self.tile_fields = tile_inputs
 
+        # Tile Preview
+
+        label = ttk.Label(self, text='Tile Preview')
+        self.tile_preview_frame = ttk.LabelFrame(self.tile_frame, labelwidget=label, padding='3 3 12 8')
+        self.tile_preview_frame.grid(column=1, row=2, sticky='news')
+
+        self.tile_preview_canvas = Canvas(self.tile_preview_frame, width=64, height=64, bd=0, highlightthickness=0)
+        self.tile_preview_canvas.grid(column=1, row=1)
+
+        self.tile_preview_image = None
+
         # ----------------------------------------
         # Post-Construction
         # ----------------------------------------
@@ -1854,4 +1876,6 @@ class Window(Tk):
 
 if __name__ == '__main__':
     window = Window()
+    # Clumsy way to activate Pillow's tkinter hooks
+    ImageTk.PhotoImage("RGBA").paste(Image.new("RGBA", (1, 1)))
     window.mainloop()

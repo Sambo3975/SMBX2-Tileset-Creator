@@ -4,10 +4,12 @@ Contains all the data needed to create a Block or BGO in SMBX2
 """
 import os
 import sys
+import tkinter
 
-from tkinter import PhotoImage, NW, NORMAL, HIDDEN
+from tkinter import PhotoImage, NW, NORMAL, HIDDEN, Canvas, SW, NE, SE, N, S, W, E, CENTER
+from typing import Union
 
-from PIL import Image
+from PIL import Image, ImageTk
 
 
 def resource_path(relative_path):
@@ -454,6 +456,37 @@ class Tile:
 
         return new_img
 
+    def _get_tile_image(self, image: Union[PhotoImage, Image.Image]):
+        if isinstance(image, PhotoImage):
+            image = ImageTk.getimage(image)
+        image = image.crop(self.canvas.coords(self.bounding_box))
+        if int(self.data['grid_padding']) > 0:
+            image = self._slice_n_splice(image, self.data['grid_size'], int(self.data['grid_padding']))
+        return image
+
+    def load_preview(self, window):
+        """
+        Load a preview of the tile.
+        :param window: Tileset Importer window instance.
+        :return: None
+        """
+        # image = window.tileset_image
+        image = self._get_tile_image(window.tileset_image)
+        w = image.width
+        h = image.height
+        image = ImageTk.PhotoImage(image)
+        # image = ImageTk.getimage(image)
+        # image.save('test1.png')
+        # image = ImageTk.PhotoImage(image)
+        # image = ImageTk.getimage(image)
+        # image.save('test2.png')
+
+        canvas: tkinter.Canvas = window.tile_preview_canvas
+        canvas.configure(width=w, height=h)
+        canvas.create_image(0, 0, anchor=NW, image=image, tags='tile_preview')
+        # canvas.create_polygon(0, 0, w, 0, w, h, 0, h)
+        window.tile_preview_image = image
+
     def export(self, image, path):
         """
         Export the tile to png and txt files for use in SMBX2.
@@ -469,9 +502,7 @@ class Tile:
 
         # Export the image
         # Easier than I thought it would be
-        image = image.crop(self.canvas.coords(self.bounding_box))
-        if int(data['grid_padding']) > 0:
-            image = self._slice_n_splice(image, data['grid_size'], int(data['grid_padding']))
+        image = self._get_tile_image(image)
         image.save(export_name + '.png')
 
         # Export the .txt file
