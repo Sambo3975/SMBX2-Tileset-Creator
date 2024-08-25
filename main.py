@@ -702,6 +702,12 @@ class Window(Tk):
         else:
             self.contents_box.configure(state=DISABLED)
 
+    def update_frame_count(self, *_):
+        frames_str = self.data['frames'].get()
+        if len(frames_str) > 0:
+            self.tile_preview_size = (self.tile_preview_full_size[0], self.tile_preview_full_size[1] // int(frames_str))
+            self.tile_preview_canvas.configure(height=self.tile_preview_size[1])
+
     def new_tile(self, selector):
         """
         Creates a new tile with all default fields
@@ -793,6 +799,21 @@ class Window(Tk):
             self.tileset_canvas.coords(self.tile_selector, x1, y1, x2, y2)
 
         return overlapping
+
+    def update_tile_preview(self):
+        frame_speed = 32
+        if self.tiles is not None and 0 <= self.current_tile_index < len(self.tiles):
+            frames_str = window.data['frames'].get()
+            frame_speed_str = window.data['framespeed'].get()
+            frame_count = int(frames_str) if len(frames_str) > 0 else 1
+            frame_speed = int(frame_speed_str) if len(frame_speed_str) > 0 else 8
+            if frame_count > 1:
+                frame = (self.tile_animation_frame + 1) % frame_count
+                size = window.tile_preview_size
+                self.tile_preview_canvas.configure(scrollregion=(0, size[1] * frame, size[0], size[1] * (frame + 1)))
+                self.tile_animation_frame = frame
+            frame_speed = frame_speed
+        window.after(int(frame_speed / 64.102564102564 * 1000), self.update_tile_preview)
 
     # ---------------------------------
     # Mouse Controls
@@ -1617,6 +1638,7 @@ class Window(Tk):
         self.tile_appearance_frame.columnconfigure(2, weight=1)
 
         # Animation Frames
+        self.data['frames'].trace_add('write', self.update_frame_count)
         w = VerifiedWidget(ttk.Spinbox, {'width': 6}, self.tile_appearance_frame, variable=self.data['frames'],
                            min_val=1, max_val=1000, label_text='Animation Frames: ',
                            label_width=self.label_width_appearance, tooltip='Number of frames in the tile\'s animation')
@@ -1840,6 +1862,9 @@ class Window(Tk):
         self.tile_preview_canvas.grid(column=1, row=1)
 
         self.tile_preview_image = None
+        self.tile_preview_size = (0, 0)
+        self.tile_preview_full_size = (0, 0)
+        self.tile_animation_frame = -1
 
         # ----------------------------------------
         # Post-Construction
@@ -1881,4 +1906,5 @@ if __name__ == '__main__':
     window = Window()
     # Clumsy way to activate Pillow's tkinter hooks
     ImageTk.PhotoImage("RGBA").paste(Image.new("RGBA", (1, 1)))
+    window.after(500, window.update_tile_preview)
     window.mainloop()

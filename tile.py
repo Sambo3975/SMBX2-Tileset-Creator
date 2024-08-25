@@ -470,22 +470,21 @@ class Tile:
         :param window: Tileset Importer window instance.
         :return: None
         """
-        # image = window.tileset_image
         image = self._get_tile_image(window.tileset_image)
         w = image.width
         h = image.height
+        window.tile_preview_full_size = (w, h)
         image = ImageTk.PhotoImage(image)
-        # image = ImageTk.getimage(image)
-        # image.save('test1.png')
-        # image = ImageTk.PhotoImage(image)
-        # image = ImageTk.getimage(image)
-        # image.save('test2.png')
+        h //= int(self.data['frames'])
 
         canvas: tkinter.Canvas = window.tile_preview_canvas
+        canvas.delete('all')
         canvas.configure(width=w, height=h)
         canvas.create_image(0, 0, anchor=NW, image=image, tags='tile_preview')
-        # canvas.create_polygon(0, 0, w, 0, w, h, 0, h)
+        canvas.configure(scrollregion=(0, 0, w, h))
         window.tile_preview_image = image
+        window.tile_preview_size = (w, h)
+        window.tile_animation_frame = -1
 
     def export(self, image, path):
         """
