@@ -40,7 +40,7 @@ Then, clone this repository into any convenient directory and try to run the `ma
 
 When you launch this software, you should see the following:
 
-![Imgur](https://imgur.com/rX7aQL9.png)
+![Imgur](https://imgur.com/JNgPW9Z.png)
 
 Go ahead and open your tileset image to get started.
 
@@ -48,7 +48,7 @@ Go ahead and open your tileset image to get started.
 
 Once you've opened your image, you should see the following. The image shown here includes a test tileset that I made.
 
-![Imgur](https://imgur.com/sy6Ch2m.png)
+![Imgur](https://imgur.com/2aEV3eZ.png)
 
 You can now configure the tileset using the options on the left panel. Refer to the tooltips in the software for more
 information about each option. Options that have bad values will be marked with a warning icon (⚠).
@@ -135,17 +135,13 @@ The following features are planned for future releases. You can request a new fe
 
 ### General Features
 
-**Tile Preview** -- Show a preview of the currently-selected tile. Useful for tiles with animations or tiles that take up multiple grid cells with padding between them.
-
 **World Map Tiles** -- Support for world map tiles. Map Tile will be added as an option for tile type. Note that options for these will be very limited when compared with other tile types.
 
 **Tileset Combining** -- Take an existing SMBX2 tileset and combine its files into an image and .tileset.ini file. This would make this tool a complete replacement for FrozenQuills's Tileset Compiler/Separator, which hasn't been updated for some time.
 
-**Increased Tile Limits** -- There are now more basegame slots in use, so max block IDs have increased, and they should be increased in this tool as well.
-
-**Mixed Tilesets** -- Option to generate a single .tileset.ini file containing both blocks and BGOs. Mixed tilesets were added in the latest PGE/SMBX2 Editor versions.
-
 **Solid Sizable Script Generation** -- Automatically generate a simple lua library that makes all solid sizables in the tileset work. This library would still need to be manually loaded in the level or world's luna.lua file.
+
+**Better Animation Options** -- Animated tiles are arranged differrently depending on the sprite sheet. Options would be added for animations that are arranged horizontally or in a grid. There would also be options for looped, ping-pong, or custom ordered animations.
 
 ### Placement Modes
 
